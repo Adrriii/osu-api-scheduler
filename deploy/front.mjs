@@ -63,12 +63,13 @@ function dial(client) {
 
     sock.once('error', (err) => {
       sock.destroy();
-      // Anything other than "nothing is listening there" is a real fault and
-      // waiting will not mend it.
-      const transient = err.code === 'ECONNREFUSED' || err.code === 'EHOSTUNREACH'
-        || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT';
-
-      if (!transient || Date.now() >= deadline) {
+      // Every connect failure is retried until the deadline, with no attempt to
+      // judge which ones are worth waiting on. Judging them was wrong: a stopped
+      // container loses its DNS entry, so the failure is EAI_AGAIN rather than
+      // ECONNREFUSED, and treating that as fatal gave up instantly on exactly
+      // the case this exists for. There is no connect error that means "it will
+      // never come back", only the deadline.
+      if (Date.now() >= deadline) {
         if (waited) held--;
         // A caller speaking HTTP gets an answer it can read rather than a
         // dropped socket it can only guess at.
