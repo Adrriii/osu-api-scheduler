@@ -6,6 +6,8 @@ export const en = {
   signOut: 'sign out',
 
   tiles: {
+    rateNow: 'Right now',
+    ofCeiling: 'of {n}/min sustained',
     lastHour: 'Last hour',
     last24h: 'Last 24 hours',
     last30d: 'Last 30 days',

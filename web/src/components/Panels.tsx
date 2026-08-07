@@ -104,7 +104,7 @@ function Meter({ value, max, label }: { value: number; max: number; label: strin
   );
 }
 
-export function Status({ s, data }: { s: Snapshot; data: Summary | null }) {
+export function Status({ s }: { s: Snapshot }) {
   const { t } = useI18n();
   const o = overall(s, t);
   const b = s.burst;
@@ -149,24 +149,51 @@ export function Status({ s, data }: { s: Snapshot; data: Summary | null }) {
         })}
       </p>
 
-      {data && (
-        <div className="windows">
-          {([
-            [t.tiles.lastHour, data.windows.hour],
-            [t.tiles.last24h, data.windows.day],
-            [t.tiles.last30d, data.windows.month],
-          ] as const).map(([label, w]) => (
-            <div className="window" key={label}>
-              <span className="k">{label}</span>
-              <span className="v tabular">{fmt(w.requests)}</span>
-              <span className={`m${w.refused ? ' warning' : ''}`}>
-                {w.refused ? fill(t.tiles.refused, { n: w.refused }) : t.tiles.noneRefused}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </section>
+  );
+}
+
+/**
+ * The headline numbers, at a size you can read across a room.
+ *
+ * The first is the one the whole service exists to manage: what the last whole
+ * minute actually cost against the ceiling. It was not shown anywhere -- the
+ * chart implies it, but reading a rate off a bar is not the same as being told
+ * it -- and the other three had been folded into the headline, where they got
+ * whatever width was left over.
+ */
+export function Tiles({ s, data }: { s: Snapshot; data: Summary | null }) {
+  const { t } = useI18n();
+  const used = s.usedLastMin ?? 0;
+  const pct = s.sustainedPerMin ? Math.min(100, (used / s.sustainedPerMin) * 100) : 0;
+
+  return (
+    <div className="tiles">
+      <div className="tile">
+        <div className="k">{t.tiles.rateNow}</div>
+        <div className="v tabular">
+          {used}<span className="of">/min</span>
+        </div>
+        <div className="meter">
+          <i style={{ width: `${pct.toFixed(1)}%` }} />
+        </div>
+        <div className="m">{fill(t.tiles.ofCeiling, { n: s.sustainedPerMin })}</div>
+      </div>
+
+      {([
+        [t.tiles.lastHour, data?.windows.hour],
+        [t.tiles.last24h, data?.windows.day],
+        [t.tiles.last30d, data?.windows.month],
+      ] as const).map(([label, w]) => (
+        <div className="tile" key={label}>
+          <div className="k">{label}</div>
+          <div className="v tabular">{w ? fmt(w.requests) : '—'}</div>
+          <div className={`m${w?.refused ? ' warning' : ''}`}>
+            {!w ? '' : w.refused ? fill(t.tiles.refused, { n: w.refused }) : t.tiles.noneRefused}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

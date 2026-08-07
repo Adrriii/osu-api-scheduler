@@ -22,6 +22,8 @@ export interface Snapshot {
   now: number;
   /** Requests delivered in a row, counted upstream so it is not capped by the feed. */
   combo: number;
+  /** Requests sent in the last complete minute, against sustainedPerMin. */
+  usedLastMin: number;
   sustainedPerMin: number;
   burst: { tokens: number; capacity: number; maxPerMin: number; reserve: number; availableToBulk: number };
   levels: Record<string, LevelState>;

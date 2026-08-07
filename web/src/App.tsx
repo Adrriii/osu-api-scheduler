@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useDashboard } from './api.js';
 import { LOCALES, useI18n, type Locale } from './i18n/index.js';
 import { UsageChart } from './components/UsageChart.js';
-import { Consumers, Feed, Levels, QueuePanel, Status } from './components/Panels.js';
+import { Consumers, Feed, Levels, QueuePanel, Status, Tiles } from './components/Panels.js';
 import { Footer } from './components/Footer.js';
 import { Playfield } from './components/Playfield.js';
 
@@ -58,8 +58,13 @@ export function App() {
       */}
       <div className="dash">
         <div className="main">
-          <div className="cell s5">{snapshot && <Status s={snapshot} data={summary} />}</div>
+          <div className="cell s5">{snapshot && <Status s={snapshot} />}</div>
           <div className="cell s4">{summary && <Consumers data={summary} />}</div>
+
+          {/* High on the page and at full width: these are the numbers the page
+              is opened for, and folded into the headline they got whatever room
+              was left. */}
+          <div className="cell s9">{snapshot && <Tiles s={snapshot} data={summary} />}</div>
 
           {/* Full width of this region: comparing five levels across eight
               measures is what an aligned table is for, and it needs the room. */}

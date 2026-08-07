@@ -159,19 +159,22 @@ a { color: var(--pink); }
   border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(0, 0, 0, 0.25); color: #fff;
 }
 
-/* The three windows sit inside the headline rather than beside it. As their own
-   panel they had to be as tall as it was, and neither had that much to say. */
-.windows {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border);
+/* Four across, each wide enough that the number is the thing you see. */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 14px; min-width: 0;
 }
-.window { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.window .k {
-  font-size: 11px; color: var(--muted); text-transform: uppercase;
-  letter-spacing: 0.06em; font-weight: 700;
+.tile .k {
+  font-size: 11px; color: var(--muted); margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
 }
-.window .v { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
-.window .m { font-size: 12px; color: var(--text-secondary); margin-left: auto; }
+.tile .v { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.tile .v .of { font-size: 14px; color: var(--muted); font-weight: 600; }
+.tile .m { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+/* Only the rate tile has one: it is the only figure here with a ceiling to be
+   read against. */
+.tile .meter { margin-top: 8px; }
 
 /* ---- surfaces ------------------------------------------------------------ */
 

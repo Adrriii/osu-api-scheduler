@@ -147,6 +147,21 @@ class Store {
     this.loadMemory();
   }
 
+  /**
+   * Requests in the last complete minute.
+   *
+   * The rate that matters is against a per-minute ceiling, so this is the one
+   * number that says how hard the limit is being pushed right now. Taken from
+   * the last whole minute rather than a sliding window, because a partial
+   * minute reads as a collapse in rate for as long as it is partial.
+   */
+  ratePerMin(): number {
+    const minute = Math.floor(Date.now() / MINUTE) * MINUTE - MINUTE;
+    let n = 0;
+    for (const agg of this.minutes.get(minute)?.values() ?? []) n += agg.n;
+    return n;
+  }
+
   /** How far back the in-memory minute buckets reach. */
   private get memoryHorizonMs(): number {
     return config.liveMinutes * MINUTE;

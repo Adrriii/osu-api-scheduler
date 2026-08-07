@@ -8,6 +8,8 @@ export const fr: Dict = {
   signOut: 'déconnexion',
 
   tiles: {
+    rateNow: 'Maintenant',
+    ofCeiling: 'sur {n}/min en soutenu',
     lastHour: 'Dernière heure',
     last24h: 'Dernières 24 heures',
     last30d: 'Derniers 30 jours',

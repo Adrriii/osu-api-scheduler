@@ -448,6 +448,7 @@ export class Scheduler {
       // rather than mixing the two.
       now: Date.now(),
       combo: this.combo,
+      usedLastMin: store.ratePerMin(),
       sustainedPerMin: Math.round(60_000 / paceIntervalMs()),
       burst: {
         tokens: Math.floor(this.tokens),
