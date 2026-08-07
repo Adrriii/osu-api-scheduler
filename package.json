@@ -1,6 +1,6 @@
 {
   "name": "osu-api-scheduler",
-  "version": "1.13.0",
+  "version": "2.0.0",
   "private": false,
   "type": "module",
   "license": "AGPL-3.0-or-later",

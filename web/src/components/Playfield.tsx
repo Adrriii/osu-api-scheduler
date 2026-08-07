@@ -4,8 +4,8 @@ import { seriesColors } from '../theme.js';
 import type { RequestRow, Snapshot, Summary } from '../types.js';
 
 /**
- * Five priority levels, five lanes. A note is one request, falling from when it
- * was queued to when it was sent.
+ * One lane per priority level. A note is one request, falling from when it was
+ * queued to when it was sent.
  *
  * Everything here follows from one decision: the field is drawn two seconds
  * behind real time. At any moment it is showing T while we already hold
@@ -34,7 +34,7 @@ import type { RequestRow, Snapshot, Summary } from '../types.js';
  * its width and forcing everything beside it to match.
  */
 const W = 220;
-const LANES = ['realtime', 'interactive', 'high', 'normal', 'bulk'];
+const LANES = ['realtime', 'interactive', 'high', 'normal'];
 const LANE_W = W / LANES.length;
 /** Room under the line for the lane names. */
 const FOOT = 40;
@@ -49,7 +49,7 @@ const RUNWAY = 40;
 /** How long a landed note takes to be consumed, and its lane to light up. */
 const HIT_MS = 300;
 
-const LANE_COLOURS = ['#ff66ab', '#e35ba8', '#c25aa6', '#9d5cad', '#7c5cd6'];
+const LANE_COLOURS = ['#ff66ab', '#e0589f', '#b95ea8', '#8c5cd0'];
 /** Consumers outside the ranked ones, who have no colour of their own. */
 const UNRANKED = '#4a4655';
 

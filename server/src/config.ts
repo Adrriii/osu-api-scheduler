@@ -23,20 +23,18 @@ function packageVersion(): string {
  *   realtime    - a missed window cannot be recovered (score collection)
  *   interactive - a person is waiting on the response (logins, page loads)
  *   high        - background, but something visible is stale until it lands
- *   normal      - routine background work
- *   bulk        - sweeps and housekeeping that soak up whatever is left over
+ *   normal      - routine background work, including sweeps
  */
 export const TIERS = {
   realtime: 0,
   interactive: 10,
   high: 20,
   normal: 30,
-  bulk: 50,
 } as const;
 
 export type Tier = keyof typeof TIERS;
 /** Unstated priority is treated as the least urgent thing on the host. */
-export const DEFAULT_TIER: Tier = 'bulk';
+export const DEFAULT_TIER: Tier = 'normal';
 
 export function isTier(v: string): v is Tier {
   return Object.hasOwn(TIERS, v);
@@ -150,11 +148,10 @@ export const config = {
    * than adding to it, so they should sum to 1.
    */
   tierShareOfSustained: {
-    realtime: num('SCHEDULER_SHARE_REALTIME', 0.1),
-    interactive: num('SCHEDULER_SHARE_INTERACTIVE', 0.1),
-    high: num('SCHEDULER_SHARE_HIGH', 0.15),
-    normal: num('SCHEDULER_SHARE_NORMAL', 0.35),
-    bulk: num('SCHEDULER_SHARE_BULK', 0.3),
+    realtime: num('SCHEDULER_SHARE_REALTIME', 0.15),
+    interactive: num('SCHEDULER_SHARE_INTERACTIVE', 0.15),
+    high: num('SCHEDULER_SHARE_HIGH', 0.2),
+    normal: num('SCHEDULER_SHARE_NORMAL', 0.5),
   } as Record<string, number>,
 
   /**
@@ -171,8 +168,7 @@ export const config = {
     realtime: num('SCHEDULER_BURST_REALTIME', 400),
     interactive: num('SCHEDULER_BURST_INTERACTIVE', 300),
     high: num('SCHEDULER_BURST_HIGH', 200),
-    normal: num('SCHEDULER_BURST_NORMAL', 150),
-    bulk: num('SCHEDULER_BURST_BULK', 100),
+    normal: num('SCHEDULER_BURST_NORMAL', 200),
   } as Record<string, number>,
 
   /** Levels at or below this may borrow against the global reserve. */

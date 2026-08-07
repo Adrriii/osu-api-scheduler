@@ -140,9 +140,9 @@ export class PriorityQueue {
    * Best waiting job that `canSend` accepts.
    *
    * The predicate exists because whether a job may go depends on its tier, not
-   * just on its turn: bulk tiers are barred from the reserved part of the burst
-   * bucket. Skipping a blocked head and trying the next tier is what lets a
-   * latency-sensitive job past a bulk queue that cannot afford to move.
+   * just on its turn: the lower levels are barred from the reserved part of the
+   * burst bucket. Skipping a blocked head and trying the next tier is what lets
+   * a latency-sensitive job past a queue that cannot afford to move.
    */
   /**
    * What is waiting, in the order it will actually be served -- effective

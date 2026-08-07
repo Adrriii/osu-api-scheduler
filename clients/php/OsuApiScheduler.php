@@ -50,10 +50,8 @@ class OsuApiScheduler {
 	const P_INTERACTIVE = 'interactive';
 	/** Background, but something visible is stale until it lands. */
 	const P_HIGH = 'high';
-	/** Routine background work. */
+	/** Routine background work, including sweeps. */
 	const P_NORMAL = 'normal';
-	/** Sweeps and housekeeping that soak up whatever capacity is left over. */
-	const P_BULK = 'bulk';
 
 	private static ?string $token = null;
 

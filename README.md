@@ -91,7 +91,7 @@ const PROEJCT_VERSION = '1.0';
 const SCHEDULER = 'http://127.0.0.1:7654';
 const TOKEN = process.env.SCHEDULER_TOKEN!;
 
-type Priority = 'realtime' | 'interactive' | 'high' | 'normal' | 'bulk';
+type Priority = 'realtime' | 'interactive' | 'high' | 'normal';
 
 class SchedulerError extends Error {}
 
@@ -128,10 +128,9 @@ Pick by what a delay costs you, not by how much you care about the job.
 | `realtime` | A missed window cannot be recovered later |
 | `interactive` | Someone is waiting on the response |
 | `high` | Background, but something visible is stale until it lands |
-| `normal` | Routine background work |
-| `bulk` | Sweeps and housekeeping. Hours late is fine |
+| `normal` | Routine background work, including sweeps |
 
-Unset means `bulk`.
+Unset means `normal`.
 
 ## Dashboard
 
