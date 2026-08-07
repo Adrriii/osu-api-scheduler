@@ -327,9 +327,12 @@ tbody tr:last-child td { border-bottom: 0; }
 .pf-line { stroke: rgba(255, 255, 255, 0.35); stroke-width: 2; }
 .pf-key { font-size: 9px; fill: var(--muted); font-weight: 700; letter-spacing: 0.08em; }
 
-/* Notes move because the queue moved, so the transition is on position only:
-   a note gliding down means the one ahead of it was served. */
-.pf-note { transition: y 400ms ease-out; }
+/* Notes are scrolled by a transform on the whole field, so they carry no
+   transition of their own: their y is where their arrival time puts them. */
+.pf-note { stroke: rgba(0, 0, 0, 0.35); stroke-width: 1; }
+/* Due but still queued. Sitting on the line is the point, so it is marked
+   rather than animated away. */
+.pf-due { opacity: 0.75; stroke: rgba(255, 255, 255, 0.45); }
 
 .pf-hit {
   animation: pf-hit 520ms ease-out forwards;
