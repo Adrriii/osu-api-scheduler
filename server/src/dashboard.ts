@@ -56,21 +56,25 @@ export function mountDashboard(app: Hono, scheduler: Scheduler): void {
      <meta name="color-scheme" content="light dark"><title>osu! API scheduler</title>
      <link rel="icon" href="/favicon.svg" type="image/svg+xml">
      <style>
-       /* Text inputs are content-box by default, so width:100% plus padding and
-          border spills past the form; buttons are border-box already, which is
-          why only the input overflowed. */
+       /* Dark only, matching the dashboard behind it. Text inputs are
+          content-box by default, so width:100% plus padding and border spills
+          past the form; buttons are border-box already, which is why only the
+          input overflowed. */
        *{box-sizing:border-box}
-       body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f9f9f7;color:#0b0b0b;
-            font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-       @media (prefers-color-scheme:dark){body{background:#0d0d0d;color:#fff}form{background:#1a1a19!important;
-            border-color:rgba(255,255,255,.1)!important}input{background:#0d0d0d!important;color:#fff!important}}
-       form{background:#fcfcfb;border:1px solid rgba(11,11,11,.1);border-radius:10px;padding:24px;min-width:300px}
-       h1{font-size:16px;margin:0 0 16px;font-weight:650}
-       input{font:inherit;width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(11,11,11,.2);
-             background:#fff;margin-bottom:12px}
-       button{font:inherit;width:100%;padding:8px;border-radius:8px;border:0;background:#2a78d6;color:#fff;
-              font-weight:600;cursor:pointer}
-       .err{color:#d03b3b;font-size:13px;margin:0 0 12px}
+       body{margin:0;min-height:100vh;display:grid;place-items:center;background:#16151a;color:#fff;
+            font:14px/1.5 ui-rounded,"Nunito","Varela Round",system-ui,-apple-system,"Segoe UI",sans-serif}
+       form{background:#242229;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:24px;
+            min-width:320px;overflow:hidden}
+       /* The same gradient the dashboard banner uses, so the two read as one product. */
+       h1{font-size:16px;margin:-24px -24px 18px;font-weight:800;padding:14px 20px;color:#fff;
+          background:linear-gradient(100deg,#5b1d9e 0%,#8f2a94 45%,#c2266f 100%)}
+       input{font:inherit;width:100%;padding:9px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.12);
+             background:#16151a;color:#fff;margin-bottom:12px}
+       input:focus{outline:2px solid #ff66ab;outline-offset:1px;border-color:transparent}
+       button{font:inherit;width:100%;padding:9px;border-radius:9px;border:0;background:#ff66ab;color:#2a0a1a;
+              font-weight:800;cursor:pointer}
+       button:hover{background:#ff7db7}
+       .err{color:#ef4444;font-size:13px;margin:0 0 12px;font-weight:600}
      </style></head><body>
      <form method="post" action="/auth/password">
        <h1>osu! API scheduler</h1>

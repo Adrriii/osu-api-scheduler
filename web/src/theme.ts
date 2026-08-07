@@ -1,20 +1,22 @@
 /**
- * Categorical slots from a palette validated for colour-vision deficiency in
- * both light and dark: worst adjacent CVD separation 9.1 light / 8.4 dark on
- * the default adjacent pairlist, comfortably over the 8 target. The ordering is
- * the safety mechanism, so do not reorder these to taste -- re-run the
- * validator if you change them.
+ * Categorical slots for the usage chart, in fixed order.
  *
- * Three light-mode slots sit below 3:1 against the surface, which is why the
- * chart always ships a legend and a table view rather than relying on colour.
+ * The dashboard is dark only, so there is one palette rather than a light and a
+ * dark variant. Validated against the card surface (#242229) with the skill's
+ * checker: every slot inside the dark lightness band, all above the chroma
+ * floor, all at least 3:1 against the surface, worst adjacent pair 12.5 ΔE
+ * under protanopia and 21.0 under normal vision.
+ *
+ * The order is the safety mechanism, not a preference. Orange and green are the
+ * classic protanopia confusion and sit deliberately far apart: putting them
+ * next to each other drops the worst adjacent pair to 5.4 ΔE, which fails. Slot
+ * 1 is osu! pink, darkened from #ff66ab so it lands inside the band.
+ *
+ * Re-run the validator if you change any of this:
+ *   node scripts/validate_palette.js "<hexes>" --mode dark --surface "#242229"
  */
-export const SERIES_LIGHT = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
-export const SERIES_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300'];
+export const SERIES = ['#e05390', '#3a92d8', '#1f9d55', '#8c5cf0', '#c97d00', '#00a2a6'];
 
 export function seriesColors(): string[] {
-  const dark =
-    document.documentElement.dataset.theme === 'dark' ||
-    (document.documentElement.dataset.theme !== 'light' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches);
-  return dark ? SERIES_DARK : SERIES_LIGHT;
+  return SERIES;
 }

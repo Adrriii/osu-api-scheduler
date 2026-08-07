@@ -1,50 +1,38 @@
 /*
- * Light and dark are both selected, not an automatic inversion: the dark values
- * are their own steps chosen against the dark surface. The data-theme scope
- * wins over the OS preference in both directions so a future theme toggle can
- * override either way.
+ * Dark only, deliberately. osu! is a dark product and the dashboard is meant to
+ * sit alongside it, so the palette is tuned against one ground rather than
+ * compromised across two. The greys carry a slight violet cast (hue ~290) so
+ * they read as osu!'s neutrals rather than as generic slate.
  */
 :root {
-  color-scheme: light;
-  --plane: #f9f9f7;
-  --surface-1: #fcfcfb;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --muted: #898781;
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
-  --border: rgba(11, 11, 11, 0.1);
-  --good: #0ca30c;
-  --warning: #fab219;
-  --serious: #ec835a;
-  --critical: #d03b3b;
-  --accent: #2a78d6;
-}
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme='light'])) {
-    color-scheme: dark;
-    --plane: #0d0d0d;
-    --surface-1: #1a1a19;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --muted: #898781;
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --border: rgba(255, 255, 255, 0.1);
-    --accent: #3987e5;
-  }
-}
-:root[data-theme='dark'] {
   color-scheme: dark;
-  --plane: #0d0d0d;
-  --surface-1: #1a1a19;
+
+  --plane: #16151a;
+  --surface-1: #242229;
+  --surface-2: #2c2a34;
+  --border: rgba(255, 255, 255, 0.08);
+
   --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --muted: #898781;
-  --grid: #2c2c2a;
-  --axis: #383835;
-  --border: rgba(255, 255, 255, 0.1);
-  --accent: #3987e5;
+  --text-secondary: #bdb7c7;
+  --muted: #8b8496;
+
+  --grid: #2e2b36;
+  --axis: #3b3745;
+
+  /* osu! pink. The bright value is for text and marks on the dark ground; the
+     dim one is the chart's first categorical slot, where it has to sit inside
+     the validated lightness band. */
+  --pink: #ff66ab;
+  --pink-dim: #e05390;
+  --accent: var(--pink);
+
+  /* Reserved for state, never reused as a series colour. */
+  --good: #22c55e;
+  --warning: #eab308;
+  --serious: #f97316;
+  --critical: #ef4444;
+
+  --brand: linear-gradient(100deg, #5b1d9e 0%, #8f2a94 45%, #c2266f 100%);
 }
 
 * { box-sizing: border-box; }
@@ -54,42 +42,95 @@ body {
   padding: 24px;
   background: var(--plane);
   color: var(--text-primary);
-  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font: 14px/1.5 ui-rounded, 'Nunito', 'Varela Round', system-ui, -apple-system,
+        'Segoe UI', sans-serif;
 }
 
 .wrap { max-width: 1180px; margin: 0 auto; }
 
-header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
-h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
-h2 { font-size: 13px; margin: 0 0 14px; font-weight: 650; color: var(--text-secondary); }
+/* ---- the banner ---------------------------------------------------------- */
+
+/* One strong osu! cue rather than several weak ones: the gradient bar with the
+   circle pattern, the same shape the status page uses for its hero. */
+header {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  background: var(--brand);
+}
+header > * { position: relative; z-index: 1; }
+/* Hit circles, faintly. Pure CSS so there is no asset to ship. */
+header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 14px 14px, transparent 7px, rgba(255, 255, 255, 0.055) 7.5px,
+                    rgba(255, 255, 255, 0.055) 9px, transparent 9.5px);
+  background-size: 38px 38px;
+  z-index: 0;
+}
+
+h1 {
+  font-size: 19px;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+header .sub { color: rgba(255, 255, 255, 0.82); }
+header a.sub { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
+
+h2 {
+  font-size: 12px;
+  margin: 0 0 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
 h2.flush { margin: 0; }
 .spacer { flex: 1; }
-.sub { color: var(--muted); font-size: 13px; }
-a { color: var(--accent); }
+.sub { color: var(--muted); font-size: 13px; font-weight: 500; }
+a { color: var(--pink); }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: inline-block; }
 .dot.stale { background: var(--critical); }
 
 .lang {
   font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 8px;
-  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(0, 0, 0, 0.25); color: #fff;
 }
+
+/* ---- surfaces ------------------------------------------------------------ */
 
 .card {
   background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  border-radius: 12px; padding: 16px; margin-bottom: 16px;
 }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-.tile .k, .stats .k { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.tile .v, .stats .v { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+.tile {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px;
+}
+.tile .k, .stats .k {
+  font-size: 11px; color: var(--muted); margin-bottom: 6px;
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+}
+/* The headline numbers are the thing you look at first, so they get the size. */
+.tile .v, .stats .v { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
 .tile .m { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 .stats { display: flex; gap: 28px; flex-wrap: wrap; align-items: baseline; }
-.stats .of { font-size: 14px; color: var(--muted); font-weight: 400; }
+.stats .of { font-size: 14px; color: var(--muted); font-weight: 500; }
 
-.meter { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; margin-top: 10px; }
-.meter > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.meter { height: 8px; border-radius: 999px; background: var(--grid); overflow: hidden; margin-top: 10px; }
+.meter > i { display: block; height: 100%; background: linear-gradient(90deg, #8f2a94, var(--pink)); border-radius: 999px; }
 .meter-marked { position: relative; overflow: visible; }
 .meter-marked .mark {
   position: absolute; top: -2px; bottom: -2px; width: 2px;
@@ -98,12 +139,15 @@ a { color: var(--accent); }
 
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 button.range {
-  font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 600; padding: 5px 13px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
 }
+button.range:hover { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.2); }
 button.range[aria-pressed='true'] {
-  background: var(--text-primary); color: var(--plane); border-color: var(--text-primary);
+  background: var(--pink); color: #2a0a1a; border-color: var(--pink); font-weight: 700;
 }
+
+/* ---- chart --------------------------------------------------------------- */
 
 .figure { margin: 0; }
 .grid { stroke: var(--grid); stroke-width: 1; }
@@ -115,6 +159,8 @@ button.range[aria-pressed='true'] {
 .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 8px; }
 figcaption { font-size: 12px; color: var(--muted); margin-top: 10px; }
 
+/* ---- tables -------------------------------------------------------------- */
+
 table {
   width: 100%; border-collapse: collapse; font-size: 13px;
   /* Widths come from the colgroup, not the contents. Without this every table
@@ -125,7 +171,11 @@ table {
 }
 /* Fixed columns mean overflow has to be handled rather than pushing the layout. */
 th, td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+th {
+  text-align: left; font-weight: 700; color: var(--muted); font-size: 11px;
+  padding: 6px 8px; border-bottom: 1px solid var(--grid);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
 td { padding: 6px 8px; border-bottom: 1px solid var(--grid); color: var(--text-secondary); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tabular { font-variant-numeric: tabular-nums; }
@@ -148,12 +198,15 @@ tbody tr:last-child td { border-bottom: 0; }
 .feed .empty { padding: 0; }
 .scroll { overflow-x: auto; }
 
-.tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); }
-.status { font-weight: 600; }
+.tag {
+  font-size: 11px; padding: 1px 8px; border-radius: 999px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text-secondary);
+}
+.status { font-weight: 700; }
 .good { color: var(--good); }
-.warning { color: var(--warning); font-weight: 600; }
-.serious { color: var(--serious); font-weight: 600; }
-.critical { color: var(--critical); font-weight: 600; }
+.warning { color: var(--warning); font-weight: 700; }
+.serious { color: var(--serious); font-weight: 700; }
+.critical { color: var(--critical); font-weight: 700; }
 .muted { color: var(--muted); }
 .bad { color: var(--critical); }
 .empty { color: var(--muted); padding: 28px 8px; text-align: center; white-space: normal; }
@@ -165,4 +218,4 @@ tbody tr:last-child td { border-bottom: 0; }
   font-size: 12px; color: var(--muted);
 }
 .foot a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
-.foot a:hover { color: var(--text-secondary); }
+.foot a:hover { color: var(--pink); }
