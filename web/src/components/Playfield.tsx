@@ -31,6 +31,24 @@ const NOTE_H = 13;
 const DELAY_MS = 2000;
 /** A request is expected to take this long: one field per second. */
 const NOMINAL_MS = 1000;
+/** How long a note takes to be consumed by the line, and its lane to light. */
+const HIT_MS = 380;
+/**
+ * Height above the field a note starts from, so it falls in past the top edge
+ * rather than appearing at it. The viewport clips it on the way in, which is
+ * what makes it look like it came from somewhere.
+ */
+const RUNWAY = 46;
+/**
+ * A request of unknown length settles toward this height, on this time
+ * constant. Both exist to keep waiting notes apart: an approach aimed at the
+ * line itself crowds them into it, because every extra second buys less and
+ * less distance, and a lane of them becomes a stack nobody can count. Aimed at
+ * a height short of the line and taken slowly, a note that has waited one
+ * second is a clear distance above one that has waited two.
+ */
+const HOLD = 0.88;
+const SETTLE_MS = 5000;
 
 const LANE_COLOURS = ['#ff66ab', '#e35ba8', '#c25aa6', '#9d5cad', '#7c5cd6'];
 
@@ -47,48 +65,56 @@ export type Note = {
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+/** Where a note that has no known ending has got to, by age alone. */
+const settling = (elapsed: number) => HOLD * (1 - Math.exp(-elapsed / SETTLE_MS));
+
 /**
  * Where a note sits, 0 at the top and 1 on the line.
  *
- * One curve covers every case, shaped by how long the request itself takes:
+ * Three cases, and which one applies is decided by the request, not by the
+ * animation:
  *
- *   p = 1 - (1 - x)^r,  x = elapsed / duration,  r = 1 + ln(duration / 1s)
+ * Inside the nominal second, a request travels at the baseline speed and simply
+ * starts its fall earlier, so every quick request falls identically and the
+ * field keeps one recognisable rhythm.
  *
- * At a one-second request r is 1 and that is a straight line, which is why it
- * meets the constant-speed case below without a seam. Longer requests bend
- * further, so a note falls freely at first and then holds off the line for as
- * long as its request really runs.
+ * Beyond it, and while the ending is still unknown, the note settles toward
+ * `HOLD` on the `SETTLE_MS` time constant -- slowing from the start and going
+ * on slowing, which is what keeps waiting notes a readable distance apart
+ * instead of piling into the line.
  *
- * While a request is still in flight its duration is unknown, but not
- * unbounded: the field is drawn two seconds in the past, and the request had
- * not finished as of the newest thing we hold, so it has already lasted at
- * least `elapsed + 2s`. Feeding that lower bound to the same curve keeps a note
- * off the line without capping it anywhere, and because the bound grows exactly
- * as fast as the delay is long, it *equals* the real duration at the instant
- * the ending arrives. The curve therefore never steps when the answer lands --
- * there is no catch-up phase, because there is nothing to catch up.
+ * Once the ending is known, and it always is at least two seconds of display
+ * time before it is due, the note is brought from wherever it had settled to
+ * the line across exactly the time that remains. Position carries over
+ * continuously, and the smoothstep means it neither jerks into the catch-up nor
+ * slams into the line at the end of it.
  *
  * Exported so the curve can be checked without a browser.
  */
 export function progress(n: Note, displayNow: number): number {
   const actual = n.endedAt === null ? null : n.endedAt - n.startedAt;
 
-  // Anything inside the nominal second travels at the baseline speed and simply
-  // starts its fall earlier, so every quick request falls identically and the
-  // field has one recognisable rhythm. Checked before the guard below, because
-  // such a note begins falling before its own request started -- a 0.4s request
-  // is on the field for 0.6s before there is anything to wait for.
+  // Checked before the guard below, because such a note begins falling before
+  // its own request started -- a 0.4s request is on the field for 0.6s before
+  // there is anything to wait for.
   if (actual !== null && actual <= NOMINAL_MS) {
     return clamp01((displayNow - (n.endedAt! - NOMINAL_MS)) / NOMINAL_MS);
   }
 
   const elapsed = displayNow - n.startedAt;
   if (elapsed <= 0) return 0;
+  if (n.endedAt === null) return settling(elapsed);
+  if (displayNow >= n.endedAt) return 1;
 
-  const d = actual ?? Math.max(NOMINAL_MS, elapsed + DELAY_MS);
-  const x = clamp01(elapsed / d);
-  const r = 1 + Math.log(d / NOMINAL_MS);
-  return 1 - Math.pow(1 - x, r);
+  // The catch-up starts when the answer arrived, or when the note did if the
+  // request was shorter than the delay and there was never anything unknown
+  // about it.
+  const from = Math.max(n.startedAt, n.endedAt - DELAY_MS);
+  if (displayNow <= from) return settling(elapsed);
+
+  const held = settling(from - n.startedAt);
+  const k = (displayNow - from) / (n.endedAt - from);
+  return held + (1 - held) * (k * k * (3 - 2 * k));
 }
 
 export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
@@ -97,6 +123,8 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
   const notes = useRef(new Map<string, Note>());
   const rects = useRef(new Map<string, SVGRectElement | null>());
   const flashUntil = useRef<number[]>(LANES.map(() => 0));
+  /** The field's own clock, which only ever moves forward. */
+  const lastDisplay = useRef(0);
   const flashes = useRef<(SVGRectElement | null)[]>([]);
   const crossed = useRef(new Set<string>());
   /** Browser clock minus server clock, learned from each snapshot. */
@@ -113,20 +141,23 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
     // Timestamps in the feed come off the server's clock and the browser has
     // its own. Comparing the two directly is what emptied the field: a browser
     // a few seconds fast prunes every note the moment it arrives, and a slow one
-    // never reaches the point where a note starts falling.
+    // never reaches the point where a note starts falling. The snapshot carries
+    // the server's clock and arrives live, so the offset comes from that -- the
+    // newest feed row is only "now" if something happened to have just
+    // finished, and on a quiet scheduler that can be minutes ago.
     //
-    // The snapshot carries the server's clock and arrives live, so the offset
-    // comes from that. Taking it from the newest feed row instead was worse than
-    // useless: on a quiet scheduler the newest request can be minutes old, and
-    // the field then runs minutes in the past, where every note sits at nought
-    // and nothing appears to move at all.
-    // A server older than this field sends no clock. Assuming the browser's is
-    // right is the correct fallback -- usually true, and wrong by seconds at
-    // worst -- whereas arithmetic on a missing value yields NaN for every
-    // position, which stops the field dead and looks like nothing is running.
+    // Held at the lowest sample seen rather than averaged, with a slow relax
+    // upward for genuine drift. A snapshot delayed in transit reads as the
+    // server being further behind than it is, and averaging that in drags this
+    // clock backwards -- which is a note climbing back up the field, since its
+    // height is a function of this clock and nothing else.
+    //
+    // A server older than this dashboard sends no clock at all, and arithmetic
+    // on a missing value yields NaN for every position, which stops the field
+    // as dead as any of the above. Missing means trusting the browser.
     if (Number.isFinite(s.now)) {
       const sample = Date.now() - s.now;
-      skew.current = skew.current === null ? sample : skew.current + (sample - skew.current) * 0.2;
+      skew.current = skew.current === null ? sample : Math.min(skew.current + 5, sample);
     } else if (skew.current === null) {
       skew.current = 0;
     }
@@ -173,7 +204,7 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
     // longer than the field can meaningfully show, is dropped.
     const display = now - DELAY_MS;
     for (const [key, n] of [...notes.current]) {
-      const gone = n.endedAt !== null && display > n.endedAt + 600;
+      const gone = n.endedAt !== null && display > n.endedAt + HIT_MS + 60;
       const ancient = n.endedAt === null && display - n.startedAt > 600_000;
       if (gone || ancient) {
         notes.current.delete(key);
@@ -190,27 +221,43 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
    * a sixty-times-a-second loop out of React entirely.
    */
   const paint = useCallback(() => {
-    const display = Date.now() - (skew.current ?? 0) - DELAY_MS;
+    // Never allowed to run backwards. The offset above is an estimate and an
+    // estimate can be revised; a note's height is a function of this clock, so
+    // any revision downward would be a note climbing back up the field.
+    const raw = Date.now() - (skew.current ?? 0) - DELAY_MS;
+    const display = Math.max(raw, lastDisplay.current);
+    lastDisplay.current = display;
 
     for (const [key, n] of notes.current) {
       const el = rects.current.get(key);
       if (!el) continue;
       const p = progress(n, display);
-      el.setAttribute('y', String(p * (LINE - NOTE_H)));
-      el.setAttribute('opacity', p > 0 ? '1' : '0');
+      // p is time, not height: 0 is the request starting and 1 is it landing on
+      // the line. The runway is added to the height only, so where a note is at
+      // any moment still means exactly what it did.
+      el.setAttribute('y', String(-RUNWAY + p * (LINE - NOTE_H + RUNWAY)));
+
+      // A note is consumed by the line it lands on, rather than sitting on it
+      // until a cleanup pass happens to notice. It fades over the same moment
+      // the lane lights up, so the two read as one event.
+      const past = n.endedAt !== null ? display - n.endedAt : -1;
+      const fading = past >= 0 ? Math.max(0, 1 - past / HIT_MS) : 1;
+      // Geometry hides a note that has not started yet -- it sits above the
+      // field -- so opacity is only ever about being consumed by the line.
+      el.setAttribute('opacity', String(fading));
 
       // The hit is the note arriving, so it fires off the animation rather
       // than off a message, and lands with the note every time.
       if (p >= 1 && !crossed.current.has(key)) {
         crossed.current.add(key);
-        flashUntil.current[n.lane] = Date.now() + 520;
+        flashUntil.current[n.lane] = Date.now() + HIT_MS;
       }
     }
 
     flashes.current.forEach((el, lane) => {
       if (!el) return;
       const left = (flashUntil.current[lane] ?? 0) - Date.now();
-      el.setAttribute('opacity', left > 0 ? String((left / 520) * 0.95) : '0');
+      el.setAttribute('opacity', left > 0 ? String((left / HIT_MS) * 0.95) : '0');
     });
   }, []);
 
