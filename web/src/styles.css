@@ -53,10 +53,11 @@ body {
 /*
  * A flowing region and a fixed column beside it.
  *
- * Panels within the region line up with each other. Nothing lines up across the
- * two, and nothing needs to: every `height: 100%` here was a panel stretched to
- * match a neighbour, and a panel stretched past its contents is exactly the
- * empty space this was meant to remove. Each is now as tall as what it holds.
+ * Panels sharing a row inside the region do line up: leaving one short of its
+ * neighbour puts a hole in the page, which is worse than a little room at the
+ * bottom of a card. What does *not* line up is the region against the column
+ * beside it -- tying those together is what stretched whole rows to match the
+ * playfield and produced the large empty areas.
  */
 .dash {
   display: grid;
@@ -68,11 +69,14 @@ body {
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 1fr));
   gap: 12px;
-  align-items: start;
 }
 .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cell { min-width: 0; }
 .cell > .card, .side > .card { margin-bottom: 0; }
+/* A card matched to a taller neighbour hands the extra height to its scroller,
+   so the room shows as more rows rather than as a gap under five of them. */
+.cell > .card { display: flex; flex-direction: column; height: 100%; }
+.cell > .card > .feed { flex: 1 1 auto; height: auto; min-height: calc(6 * var(--row)); }
 
 .s9 { grid-column: span 9; }
 .s6 { grid-column: span 6; }
