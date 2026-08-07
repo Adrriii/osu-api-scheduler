@@ -43,33 +43,48 @@ export function App() {
 
       {error && <p className="card critical">{t.error.load}</p>}
 
-      {/* Order is the answer to "is it fine", then "how much have I used",
-          then the detail behind both. */}
-      {snapshot && <Status s={snapshot} />}
-      {summary && <Tiles data={summary} />}
-      {snapshot && summary && <Levels s={snapshot} latency={summary.latency} />}
+      {/*
+        Reading order is the order the questions get asked: is it fine, how much
+        have I used, then the detail behind both. Across is grouping -- the
+        headline sits beside the windows it summarises, the chart beside who
+        caused it, and the two live tables beside each other because they are
+        read together, one being what is waiting and the other what just went.
+      */}
+      <div className="dash">
+        <div className="cell s8">{snapshot && <Status s={snapshot} />}</div>
+        <div className="cell s4">{summary && <Tiles data={summary} />}</div>
 
-      <section className="card">
-        <div className="row">
-          <h2 className="flush">{t.usage.heading}</h2>
-          <span className="spacer" />
-          {ranges.map(([key, label]) => (
-            <button
-              key={key}
-              className="range"
-              aria-pressed={range === key}
-              onClick={() => setRange(key)}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Full width: comparing five levels across six measures is what an
+            aligned table is for, and it needs the room to stay aligned. */}
+        <div className="cell s12">
+          {snapshot && summary && <Levels s={snapshot} latency={summary.latency} />}
         </div>
-        {summary && <UsageChart data={summary} />}
-      </section>
 
-      {summary && <Consumers data={summary} />}
-      {snapshot && <QueuePanel s={snapshot} />}
-      <Feed rows={feed} />
+        <div className="cell s8">
+          <section className="card">
+            <div className="row">
+              <h2 className="flush">{t.usage.heading}</h2>
+              <span className="spacer" />
+              {ranges.map(([key, label]) => (
+                <button
+                  key={key}
+                  className="range"
+                  aria-pressed={range === key}
+                  onClick={() => setRange(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {summary && <UsageChart data={summary} />}
+          </section>
+        </div>
+        <div className="cell s4">{summary && <Consumers data={summary} />}</div>
+
+        <div className="cell s6">{snapshot && <QueuePanel s={snapshot} />}</div>
+        <div className="cell s6"><Feed rows={feed} /></div>
+      </div>
+
       <Footer data={summary} />
     </div>
   );

@@ -46,7 +46,42 @@ body {
         'Segoe UI', sans-serif;
 }
 
-.wrap { max-width: 1180px; margin: 0 auto; }
+/* Wide enough to actually use a desktop. The cap exists because line length in
+   the tables stops being readable past it, not because the layout needs it. */
+.wrap { width: min(100%, 1760px); margin: 0 auto; }
+
+/*
+ * Twelve columns, so panels sit beside each other instead of one per line.
+ * Cells stretch to their row's height and the card inside fills the cell, so a
+ * pair lines up top and bottom instead of leaving a ragged step between them.
+ */
+.dash {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+.cell { min-width: 0; }
+.cell > .card, .cell > section { margin-bottom: 0; height: 100%; }
+/* A card that has been stretched to match its neighbour hands the extra height
+   to its scroller, so the queue and the feed show more rows rather than leaving
+   a gap under six. The six-row floor still holds when there is nothing spare. */
+.cell > .card { display: flex; flex-direction: column; }
+.cell > .card > .feed { flex: 1 1 auto; height: auto; min-height: calc(6 * var(--row)); }
+.s12 { grid-column: span 12; }
+.s8 { grid-column: span 8; }
+.s6 { grid-column: span 6; }
+.s4 { grid-column: span 4; }
+
+/* Breakpoints are set by what each panel needs, not by device names. The chart
+   and the levels table are the widest things here, so they give up their
+   neighbours first. */
+@media (max-width: 1400px) {
+  .s8 { grid-column: span 12; }
+  .s4 { grid-column: span 12; }
+}
+@media (max-width: 1080px) {
+  .s6 { grid-column: span 12; }
+}
 
 /* ---- the banner ---------------------------------------------------------- */
 
@@ -115,6 +150,21 @@ a { color: var(--pink); }
 }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.cell > .tiles { margin-bottom: 0; height: 100%; }
+
+/* Beside the headline the three windows are a column, and each tile turns
+   sideways: label and note on the left, number on the right. Stacked upright
+   they would be three times taller than the panel they sit next to. */
+@media (min-width: 1401px) {
+  .cell > .tiles { grid-template-columns: 1fr; grid-auto-rows: 1fr; }
+  .cell > .tiles .tile {
+    display: grid; grid-template-columns: 1fr auto;
+    align-items: center; gap: 0 14px; padding: 10px 16px;
+  }
+  .cell > .tiles .tile .k { grid-column: 1; grid-row: 1; margin-bottom: 2px; }
+  .cell > .tiles .tile .m { grid-column: 1; grid-row: 2; margin-top: 0; }
+  .cell > .tiles .tile .v { grid-column: 2; grid-row: 1 / span 2; font-size: 26px; }
+}
 .tile {
   background: var(--surface-1); border: 1px solid var(--border);
   border-radius: 12px; padding: 14px 16px;
