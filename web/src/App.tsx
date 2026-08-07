@@ -48,9 +48,10 @@ export function App() {
         Reading order is the order the questions get asked: is it fine, who is
         asking, then the detail behind both. Across is grouping -- the headline
         beside the consumers it is the sum of, and the two live tables beside
-        each other because they are read together, one being what is waiting and
-        the other what just went. The playfield holds the right edge throughout,
-        filling whatever height the two rows beside it come to.
+        each other because they are read together. The playfield holds the right
+        edge and fills whatever height the rows beside it come to; the queue sits
+        directly beneath it, being the same requests it is showing, and the live
+        feed beside the chart, being what the chart is made of.
       */}
       <div className="dash">
         <div className="cell s5">{snapshot && <Status s={snapshot} data={summary} />}</div>
@@ -88,8 +89,8 @@ export function App() {
             {summary && <UsageChart data={summary} />}
           </section>
         </div>
-        <div className="cell s3">{snapshot && <QueuePanel s={snapshot} />}</div>
         <div className="cell s3"><Feed rows={feed} /></div>
+        <div className="cell s3">{snapshot && <QueuePanel s={snapshot} />}</div>
       </div>
 
       <Footer data={summary} />

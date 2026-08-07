@@ -156,7 +156,7 @@ a { color: var(--pink); }
    panel they had to be as tall as it was, and neither had that much to say. */
 .windows {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border);
+  margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border);
 }
 .window { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .window .k {
@@ -183,12 +183,12 @@ a { color: var(--pink); }
 
 /* ---- the headline -------------------------------------------------------- */
 
-.hero { padding: 14px 16px 12px; }
+.hero { padding: 12px 14px; }
 .hero-state { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 /* The icon carries the state alongside the word, so the colour is never the
    only thing saying it. */
-.hero-icon { font-size: 26px; line-height: 1; }
-.hero-word { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.hero-icon { font-size: 22px; line-height: 1; }
+.hero-word { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
 .hero-detail { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
 .hero-state.good .hero-icon, .hero-state.good .hero-word { color: var(--good); }
 .hero-state.warning .hero-icon, .hero-state.warning .hero-word { color: var(--warning); }
@@ -203,8 +203,8 @@ a { color: var(--pink); }
 }
 .hero-counts .v { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
 .hero-counts .of { font-size: 13px; color: var(--muted); font-weight: 600; }
-.hero-foot { margin: 10px 0 0; }
-.hero .meter { margin-top: 12px; }
+.hero-foot { margin: 8px 0 0; }
+.hero .meter { margin-top: 10px; }
 
 .meter { height: 8px; border-radius: 999px; background: var(--grid); overflow: hidden; margin-top: 10px; }
 .meter > i { display: block; height: 100%; background: linear-gradient(90deg, #8f2a94, var(--pink)); border-radius: 999px; }
@@ -267,10 +267,10 @@ table {
 th, td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 th {
   text-align: left; font-weight: 700; color: var(--muted); font-size: 11px;
-  padding: 6px 8px; border-bottom: 1px solid var(--grid);
+  padding: 4px 8px; border-bottom: 1px solid var(--grid);
   text-transform: uppercase; letter-spacing: 0.05em;
 }
-td { padding: 6px 8px; border-bottom: 1px solid var(--grid); color: var(--text-secondary); }
+td { padding: 5px 8px; border-bottom: 1px solid var(--grid); color: var(--text-secondary); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tabular { font-variant-numeric: tabular-nums; }
 tbody tr:last-child td { border-bottom: 0; }
@@ -310,7 +310,7 @@ tbody tr:last-child td { border-bottom: 0; }
 /* No heading, and no padding: the panel *is* the field, edge to edge. Its
    height comes from the space it is given rather than from its own width, so it
    fills whatever slot it sits in instead of forcing its neighbours to match. */
-.playfield { overflow: hidden; padding: 0; }
+.playfield { overflow: hidden; padding: 0; position: relative; }
 /* osu!'s own two readouts, carrying real numbers: accuracy is the delivered
    share of everything attempted, combo the run of requests since the last
    refusal. A combo break is exactly the moment osu! turned us away.
@@ -323,7 +323,11 @@ tbody tr:last-child td { border-bottom: 0; }
   letter-spacing: -0.03em; pointer-events: none;
 }
 
-.pf-svg { width: 100%; height: 100%; display: block; }
+/* Taken out of the flow on purpose. An svg with a viewbox carries an intrinsic
+   height, so in normal flow it *demanded* one and the panels beside it were
+   stretched to match -- the very thing it was meant to stop doing. Absolute, it
+   asks for nothing and fills whatever the row comes to. */
+.pf-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .pf-lane { fill: rgba(0, 0, 0, 0.28); }
 .pf-line { stroke: rgba(255, 255, 255, 0.35); stroke-width: 2; }
 /* Full level names: two letters left 'in' and 'no' telling nobody anything. */
