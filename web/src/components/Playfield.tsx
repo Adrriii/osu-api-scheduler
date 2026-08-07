@@ -96,6 +96,43 @@ export function progress(n: Note, at: number): number {
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+const failed = (r: RequestRow) => !!r.limiter || r.status >= 400 || r.status === 0;
+
+/**
+ * The combo as the field sees it, rather than as the server does.
+ *
+ * The scheduler's count is of right now; the field is showing two seconds ago,
+ * so reading it directly made the number rise two seconds before the note that
+ * earned it reached the line. Here the rows after the field's clock are ignored
+ * and the streak is counted back from it, so it rises exactly as a note lands.
+ *
+ * Rows only reach back 150, so a longer streak cannot be counted from them.
+ * Where no break is found within that window the server's total is used
+ * instead, less whatever has landed since -- which is the same number, arrived
+ * at from the other end.
+ *
+ * Exported so it can be checked without a browser.
+ */
+export function comboAt(feed: RequestRow[], at: number, serverCombo: number): number {
+  let streak = 0;
+  let sinceField = 0;
+  let brokeSinceField = false;
+
+  for (const r of feed) {
+    if (r.ts > at) {
+      if (failed(r)) brokeSinceField = true;
+      else sinceField++;
+      continue;
+    }
+    if (failed(r)) return streak;
+    streak++;
+  }
+
+  // Nothing in the window broke it, so it runs back further than we can see.
+  if (!brokeSinceField) return Math.max(streak, serverCombo - sinceField);
+  return streak;
+}
+
 /**
  * One step of the field's clock.
  *
@@ -137,8 +174,11 @@ export function Playfield({
   const rects = useRef(new Map<number, SVGRectElement | null>());
   const flashes = useRef<(SVGRectElement | null)[]>([]);
   const flashUntil = useRef<number[]>(LANES.map(() => 0));
-  const flashColour = useRef<string[]>(LANES.map(() => UNRANKED));
   const landed = useRef(new Set<number>());
+  /** Read by the frame loop, which must not close over a changing prop. */
+  const rows = useRef<RequestRow[]>(feed);
+  const serverCombo = useRef(0);
+  const comboText = useRef<SVGTextElement | null>(null);
 
   /**
    * Browser clock minus the server's.
@@ -189,6 +229,8 @@ export function Playfield({
       skew.current = skew.current === null ? sample : Math.min(skew.current + 20, sample);
     }
     const at = fieldNow();
+    rows.current = feed;
+    serverCombo.current = s.combo ?? 0;
 
     for (const j of s.queue ?? []) {
       const lane = LANES.indexOf(j.tier);
@@ -264,15 +306,19 @@ export function Playfield({
         if (p >= 1 && !landed.current.has(id)) {
           landed.current.add(id);
           flashUntil.current[n.lane] = wall + HIT_MS;
-          flashColour.current[n.lane] = colour(n.consumer);
         }
+      }
+
+      // Written here rather than rendered, so it changes on the frame the note
+      // lands rather than whenever React next has a reason to run.
+      if (comboText.current) {
+        comboText.current.textContent = `${comboAt(rows.current, at, serverCombo.current)}x`;
       }
 
       flashes.current.forEach((el, lane) => {
         if (!el) return;
         const left = (flashUntil.current[lane] ?? 0) - wall;
-        el.setAttribute('fill', flashColour.current[lane] ?? UNRANKED);
-        el.setAttribute('opacity', left > 0 ? String((left / HIT_MS) * 0.9) : '0');
+        el.setAttribute('opacity', left > 0 ? String(left / HIT_MS) : '0');
       });
 
       raf = requestAnimationFrame(step);
@@ -296,10 +342,21 @@ export function Playfield({
                 className="pf-lane" />
         ))}
 
-        <g clipPath="url(#pf-clip)">
+        <defs>
           <clipPath id="pf-clip">
             <rect x={0} y={0} width={W} height={LINE} />
           </clipPath>
+          {/* Light off the line, brightest where the note met it. Not a colour:
+              every lane lights the same way, so the flash says a request went
+              rather than repeating who sent it. */}
+          <linearGradient id="pf-light" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.9" />
+            <stop offset="45%" stopColor="#fff" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        <g clipPath="url(#pf-clip)">
           {ids.map((id) => {
             const n = notes.current.get(id)!;
             return (
@@ -320,8 +377,9 @@ export function Playfield({
           })}
         </g>
 
-        <text x={W / 2} y={LINE * 0.56} textAnchor="middle" className="pf-combo">
-          {s.combo ?? 0}x
+        <text ref={comboText} x={W / 2} y={LINE * 0.56} textAnchor="middle"
+              className="pf-combo">
+          0x
         </text>
         <text x={W - 5} y={13} textAnchor="end" className="pf-acc">
           {accuracy.toFixed(2)}%
@@ -332,9 +390,9 @@ export function Playfield({
         {LANES.map((tier, i) => (
           <rect key={`f-${tier}`}
                 ref={(el) => { flashes.current[i] = el; }}
-                x={i * LANE_W + 1} y={LINE - 4}
-                width={LANE_W - 3} height={8} rx={3}
-                opacity={0} fill={UNRANKED} className="pf-hit" />
+                x={i * LANE_W} y={LINE - 34}
+                width={LANE_W - 1} height={34}
+                opacity={0} fill="url(#pf-light)" className="pf-hit" />
         ))}
 
         {LANES.map((tier, i) => (
