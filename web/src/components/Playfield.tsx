@@ -96,6 +96,24 @@ export function progress(n: Note, at: number): number {
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+/**
+ * One step of the field's clock.
+ *
+ * It advances at wall speed and is nudged toward `target` by at most a tenth of
+ * the elapsed time, so it cannot jump and cannot run backwards. Reading the
+ * target directly is what made the field lurch: the offset it is built from is
+ * re-estimated on every snapshot, and each correction, however small, moved
+ * every note at once.
+ *
+ * Exported so the discipline can be checked without a browser.
+ */
+export function stepClock(prev: number, lastWall: number, wall: number, target: number): number {
+  if (!prev) return target;
+  const dt = Math.max(0, Math.min(250, wall - lastWall));
+  const drift = target - (prev + dt);
+  return prev + dt + Math.max(-dt * 0.1, Math.min(dt * 0.1, drift));
+}
+
 export function Playfield({
   s,
   feed,
@@ -121,8 +139,43 @@ export function Playfield({
   const flashUntil = useRef<number[]>(LANES.map(() => 0));
   const flashColour = useRef<string[]>(LANES.map(() => UNRANKED));
   const landed = useRef(new Set<number>());
-  /** Browser clock minus the server's. The timings below are all server time. */
-  const skew = useRef(0);
+
+  /**
+   * Browser clock minus the server's.
+   *
+   * Held at the lowest sample seen, with a small allowance to rise for genuine
+   * drift. A snapshot delayed in transit arrives looking like the server is
+   * further behind than it is, and taking each sample at face value moved this
+   * estimate -- and therefore every note on the field -- several times a second.
+   * The lowest sample is the one that spent least time in transit, so it is the
+   * closest to the truth.
+   */
+  const skew = useRef<number | null>(null);
+  /** The field's own clock, and the wall time it was last advanced at. */
+  const clock = useRef(0);
+  const lastWall = useRef(0);
+
+  /**
+   * The time the field is showing.
+   *
+   * It runs at wall speed and is only ever nudged toward where the estimate says
+   * it should be, by at most a tenth of the elapsed time. Reading the estimate
+   * directly is what made the field jump: every correction to it, however small,
+   * moved every note at once, several times a second. Slewing means the clock
+   * cannot jump and cannot run backwards, so a note's position is a function of
+   * something that only ever advances smoothly.
+   */
+  const fieldNow = () => {
+    const wall = Date.now();
+    clock.current = stepClock(
+      clock.current,
+      lastWall.current,
+      wall,
+      wall - (skew.current ?? 0) - DELAY_MS,
+    );
+    lastWall.current = wall;
+    return clock.current;
+  };
 
   /**
    * Both views of a request now carry its id and the moment it was queued, so a
@@ -131,8 +184,11 @@ export function Playfield({
    * and faded. Nothing is ever rebuilt under a new identity.
    */
   const ids = useMemo(() => {
-    if (Number.isFinite(s.now)) skew.current = Date.now() - s.now;
-    const at = Date.now() - skew.current - DELAY_MS;
+    if (Number.isFinite(s.now)) {
+      const sample = Date.now() - s.now;
+      skew.current = skew.current === null ? sample : Math.min(skew.current + 20, sample);
+    }
+    const at = fieldNow();
 
     for (const j of s.queue ?? []) {
       const lane = LANES.indexOf(j.tier);
@@ -190,8 +246,8 @@ export function Playfield({
   useEffect(() => {
     let raf = 0;
     const step = () => {
-      const at = Date.now() - skew.current - DELAY_MS;
       const wall = Date.now();
+      const at = fieldNow();
 
       for (const [id, n] of notes.current) {
         const el = rects.current.get(id);
