@@ -1,5 +1,5 @@
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { TIERS, config, paceIntervalMs, type Tier } from './config.js';
+import { TIERS, config, isTier, paceIntervalMs, type Tier } from './config.js';
 import { log } from './log.js';
 import { PriorityQueue, type Job, type JobRequest, type JobResult } from './queue.js';
 import { send, type Limiter } from './upstream.js';
@@ -535,7 +535,14 @@ export class Scheduler {
         tokens?: number; levels?: Partial<Record<Tier, number>>; combo?: number;
       };
       if (Number.isFinite(d.tokens)) this.tokens = Math.max(0, d.tokens!);
-      if (d.levels) this.levels = d.levels;
+      // Only levels that still exist. A bank saved under a level that has since
+      // been removed would otherwise be read back and written out again on every
+      // restart, outliving the level indefinitely.
+      if (d.levels) {
+        for (const [tier, tokens] of Object.entries(d.levels)) {
+          if (isTier(tier) && Number.isFinite(tokens)) this.levels[tier] = tokens as number;
+        }
+      }
       if (Number.isFinite(d.combo)) this.combo = d.combo!;
       log.info('restored buckets from disk', { tokens: Math.round(this.tokens) });
     } catch {
