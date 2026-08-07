@@ -471,9 +471,30 @@ export class Scheduler {
     };
   }
 
-  async stop(): Promise<void> {
+  /**
+   * Serve what is already queued, then stop.
+   *
+   * Two instances must never run at once -- each would hold its own token
+   * bucket and spend the same per-IP budget twice, which is what earns the
+   * lockout this whole service exists to avoid. So an update cannot overlap
+   * old and new; the gap can only be made short and the queue can be made to
+   * survive it. Failing every queued request on SIGTERM turned each restart
+   * into a burst of errors at every consumer, and a consumer that reads an
+   * error as an answer does real damage with it.
+   *
+   * Pumping continues while draining. Only new arrivals are refused, by the
+   * listener closing first.
+   */
+  async stop(graceMs = 25_000): Promise<void> {
+    const deadline = Date.now() + graceMs;
+    while (this.queue.size > 0 && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
     this.stopping = true;
     if (this.timer) clearTimeout(this.timer);
+    // Anything the grace period could not reach. It never went to osu!, so the
+    // reason says so and callers can retry it.
     this.queue.drain('shutdown');
   }
 }

@@ -2,6 +2,11 @@
 Description=osu! API scheduler
 Documentation=https://github.com/Adrriii/osu-api-scheduler
 After=network.target
+# The socket unit holds the listening port across restarts, so consumers queue
+# rather than get refused. SCHEDULER_HOST/PORT are then unused: the address
+# comes from ListenStream in the .socket file.
+Requires=osu-api-scheduler.socket
+After=osu-api-scheduler.socket
 
 [Service]
 Type=simple
@@ -17,9 +22,10 @@ ExecStart=/usr/bin/env node --import tsx server/src/index.ts
 # Everything else on the host waits on this one, so come back fast.
 Restart=always
 RestartSec=2
-# In-flight callers are holding open HTTP connections; let them be answered
-# or time out rather than being cut mid-request.
-TimeoutStopSec=20
+# SIGTERM drains the queue rather than failing it, so stopping takes as long as
+# serving what was already accepted. Must exceed SCHEDULER_SHUTDOWN_GRACE_MS
+# (25s by default) or systemd kills the process mid-drain.
+TimeoutStopSec=40
 
 # Hardening. The scheduler needs outbound network, its state directory, and
 # nothing else.

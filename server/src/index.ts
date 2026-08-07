@@ -1,4 +1,4 @@
-import { serve } from '@hono/node-server';
+import { createAdaptorServer, serve } from '@hono/node-server';
 import { Hono, type Context } from 'hono';
 import { DEFAULT_TIER, config, isTier, TIERS } from './config.js';
 import { log } from './log.js';
@@ -170,18 +170,47 @@ app.get('/healthz', (c) => c.json({ ok: true, tiers: TIERS }));
 // Last: it owns the catch-all that serves the dashboard.
 mountDashboard(app, scheduler);
 
-const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) => {
+function announce(addr: string) {
   log.info('osu! API scheduler listening', {
-    addr: `${config.host}:${info.port}`,
+    addr,
     sustainedPerMin: scheduler.snapshot().sustainedPerMin,
     tiers: Object.keys(TIERS).join(','),
   });
-});
+}
+
+/**
+ * systemd passes an already-listening socket as fd 3 when the matching .socket
+ * unit is in use. LISTEN_PID guards against inheriting one meant for a
+ * different process.
+ *
+ * Using it instead of binding our own port is what makes a restart invisible:
+ * systemd holds the socket open across it, so callers still connect and their
+ * requests wait in the kernel backlog rather than being refused. The new
+ * process accepts them as soon as it is up. Without this the same restart is a
+ * few seconds of connection errors at every consumer.
+ */
+const SD_LISTEN_FD = 3;
+const socketActivated =
+  Number(process.env.LISTEN_FDS ?? 0) > 0 && Number(process.env.LISTEN_PID ?? 0) === process.pid;
+
+const server = socketActivated
+  ? createAdaptorServer({ fetch: app.fetch })
+  : serve({ fetch: app.fetch, port: config.port, hostname: config.host }, (info) =>
+      announce(`${config.host}:${info.port}`),
+    );
+
+if (socketActivated) {
+  server.listen({ fd: SD_LISTEN_FD }, () => announce(`systemd socket (fd ${SD_LISTEN_FD})`));
+}
 
 async function shutdown(signal: string) {
-  log.info('shutting down', { signal, queued: scheduler.queue.size });
+  const queued = scheduler.queue.size;
+  log.info('draining before shutdown', { signal, queued, graceMs: config.shutdownGraceMs });
+  // Close the listener first so nothing new arrives. Connections already open
+  // stay up, which is what lets the queued jobs still answer their callers.
   server.close();
-  await scheduler.stop();
+  await scheduler.stop(config.shutdownGraceMs);
+  log.info('shutdown complete', { served: queued - scheduler.queue.size });
   process.exit(0);
 }
 

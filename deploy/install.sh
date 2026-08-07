@@ -31,9 +31,9 @@ echo "==> installing dependencies and building the dashboard"
 cd "$PREFIX"
 npm ci --silent
 npm run build --silent
-# Dev dependencies are only needed for the build; tsx is needed at runtime.
+# Dev dependencies are only needed for the build. tsx is a runtime dependency,
+# so pruning leaves it in place.
 npm prune --omit=dev --silent >/dev/null 2>&1 || true
-npm i --silent -w server tsx@^4.19.0
 
 if [[ ! -f "$CONF/token" ]]; then
   echo "==> generating a scheduler token"
@@ -67,7 +67,16 @@ sed -e "s|/opt/osu-api-scheduler|$PREFIX|g" \
     -e "s|User=osu-api-scheduler|User=$USER_NAME|" \
     -e "s|Group=osu-api-scheduler|Group=$USER_NAME|" \
     "$PREFIX/deploy/osu-api-scheduler.service" > /etc/systemd/system/osu-api-scheduler.service
+
+# The socket is what keeps restarts from being felt: systemd holds the port open
+# while the service is down, so callers queue instead of getting refused.
+PORT="$(grep -oP 'SCHEDULER_PORT=\K\d+' "$CONF/scheduler.env" 2>/dev/null || echo 7654)"
+HOST="$(grep -oP 'SCHEDULER_HOST=\K\S+' "$CONF/scheduler.env" 2>/dev/null || echo 127.0.0.1)"
+sed -e "s|ListenStream=.*|ListenStream=$HOST:$PORT|" \
+    "$PREFIX/deploy/osu-api-scheduler.socket" > /etc/systemd/system/osu-api-scheduler.socket
+
 systemctl daemon-reload
+systemctl enable --now osu-api-scheduler.socket
 systemctl enable --now osu-api-scheduler
 
 sleep 2

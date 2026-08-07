@@ -227,6 +227,13 @@ export const config = {
    * bytes: 90 days hourly plus a decade daily is about 6 MB.
    */
   feedSize: num('SCHEDULER_FEED_SIZE', 500),
+  /**
+   * How long a restart may spend serving the queue it already holds before
+   * giving up on the rest. Keep it below the service manager's stop timeout,
+   * or the process is killed mid-drain and the point is lost.
+   */
+  shutdownGraceMs: num('SCHEDULER_SHUTDOWN_GRACE_MS', 25_000),
+
   liveMinutes: num('SCHEDULER_LIVE_MINUTES', 180),
   latencySamples: num('SCHEDULER_LATENCY_SAMPLES', 2000),
 

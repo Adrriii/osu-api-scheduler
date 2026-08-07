@@ -178,6 +178,39 @@ Same command whether the scheduler runs in Docker or on the host: both listen on
 `/api/*` is safe to expose, it needs `SCHEDULER_TOKEN`. The templates in
 `deploy/` have a commented-out block if you would rather keep it private anyway.
 
+## Update
+
+```bash
+npm run update
+```
+
+Pulls the current branch, rebuilds only what changed, restarts, and waits for
+the health check. If it does not come back healthy it rolls back to the commit
+you were on. Docker and bare metal are detected, not configured; on bare metal
+add `sudo` if the service runs from a directory you do not own.
+
+```bash
+npm run update -- --check    # say what would happen, change nothing
+npm run update -- --force    # rebuild and restart even if nothing changed
+```
+
+Two schedulers must never run at once: each would keep its own token bucket and
+spend the same per-IP budget twice, which is the lockout this whole thing exists
+to avoid. So there is no overlapping handover. Three things cover the gap
+instead:
+
+- The build runs while the old process is still serving.
+- `SIGTERM` finishes the queue it already accepted rather than failing it.
+- systemd holds the listening socket, so callers connect normally while nothing
+  is running and their requests wait in the kernel backlog.
+
+Measured with the service fully stopped: the request still returned 200, in
+0.17s, because the connection itself brought the service back up. Consumers see
+latency, not errors.
+
+The socket is installed and enabled by `deploy/install.sh`. Under Docker there
+is no equivalent, so a restart there is a real gap of a few seconds.
+
 ## Settings
 
 Everything is optional except `SCHEDULER_TOKEN`. Defaults match what osu!

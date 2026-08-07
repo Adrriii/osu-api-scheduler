@@ -1,0 +1,19 @@
+[Unit]
+Description=osu! API scheduler socket
+Documentation=https://github.com/Adrriii/osu-api-scheduler
+
+[Socket]
+# systemd owns this socket, not the service. It stays open while the service
+# restarts, so callers still connect and their requests wait in the kernel
+# backlog instead of being refused. That is what makes an update invisible to
+# consumers: two schedulers can never run at once (they would each hold a token
+# bucket and spend the same per-IP budget twice), so the restart is a real gap,
+# and this is what keeps the gap from being felt.
+ListenStream=127.0.0.1:7654
+
+# The whole host's osu! traffic queues here during a restart. The default of
+# 128 is a handful of seconds of a busy backlog; this costs nothing when unused.
+Backlog=1024
+
+[Install]
+WantedBy=sockets.target
