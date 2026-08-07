@@ -4,6 +4,8 @@
 #   npm run update            update to the latest commit on the current branch
 #   npm run update -- --force rebuild and restart even if nothing changed
 #   npm run update -- --check report what an update would do, change nothing
+#   npm run update -- --docker force the deployment kind if detection is wrong
+#   npm run update -- --bare
 #
 # Docker and bare metal are detected, not configured.
 #
@@ -22,6 +24,8 @@ HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-60}"
 
 FORCE=0
 CHECK=0
+MODE_OVERRIDE=""
+
 
 # `npm run update --force` hands the flag to npm rather than to this script, and
 # npm exports it as npm_config_force instead. Without this the flag is silently
@@ -34,6 +38,9 @@ for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
     --check) CHECK=1 ;;
+    # For when detection is wrong, so a deploy is never blocked by it.
+    --docker) MODE_OVERRIDE=docker ;;
+    --bare) MODE_OVERRIDE=bare ;;
     -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -51,16 +58,45 @@ cd "$SRC"
 
 # ---- where is it running? --------------------------------------------------
 
-MODE=""
-if [[ -f docker-compose.yml ]] && command -v docker >/dev/null 2>&1 \
-   && docker compose ps --quiet 2>/dev/null | grep -q .; then
-  MODE=docker
-elif systemctl list-unit-files "$UNIT.service" >/dev/null 2>&1 \
-     && systemctl cat "$UNIT" >/dev/null 2>&1; then
-  MODE=bare
-else
-  die "no running instance found: no docker compose project here and no $UNIT service.
-       Install first with deploy/install.sh, or run this from the checkout you deployed from."
+DOCKER_WHY=""
+
+docker_running() {
+  if ! command -v docker >/dev/null 2>&1; then
+    DOCKER_WHY="docker is not on PATH"
+    return 1
+  fi
+  if [[ ! -f docker-compose.yml ]]; then
+    DOCKER_WHY="no docker-compose.yml in $SRC"
+    return 1
+  fi
+  # -q rather than --quiet, and stderr kept: an unreadable compose file or a
+  # daemon we cannot talk to is worth saying out loud rather than reporting as
+  # "nothing is running".
+  local out
+  if ! out="$(docker compose ps -q 2>&1)"; then
+    DOCKER_WHY="docker compose ps failed: ${out//$'\n'/ }"
+    return 1
+  fi
+  if [[ -z ${out//[[:space:]]/} ]]; then
+    DOCKER_WHY="docker compose ps listed no containers for this project"
+    return 1
+  fi
+  return 0
+}
+
+MODE="${MODE_OVERRIDE:-}"
+if [[ -z $MODE ]]; then
+  if docker_running; then
+    MODE=docker
+  elif systemctl list-unit-files "$UNIT.service" >/dev/null 2>&1 \
+       && systemctl cat "$UNIT" >/dev/null 2>&1; then
+    MODE=bare
+  else
+    die "could not tell how this is deployed, so nothing was changed.
+       docker: $DOCKER_WHY
+       systemd: no $UNIT service found
+       Run from the checkout you deployed from, or force it with --docker / --bare."
+  fi
 fi
 
 # Where the service actually runs from, asked rather than assumed: install.sh
