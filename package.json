@@ -1,0 +1,17 @@
+{
+  "name": "osu-api-scheduler",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "description": "Priority-scheduling proxy for the osu! API. One process owns the per-IP rate budget for a whole host, queues every project's requests by how much delay each can absorb, and shows where the budget goes.",
+  "keywords": ["osu", "osu-api", "rate-limit", "scheduler", "proxy"],
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "dev": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "build": "npm run build --workspace web",
+    "start": "npm run start --workspace server",
+    "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace web"
+  }
+}

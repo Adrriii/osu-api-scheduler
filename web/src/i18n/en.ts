@@ -1,0 +1,96 @@
+export const en = {
+  title: 'osu! API scheduler',
+  live: 'live',
+  connecting: 'connecting…',
+  reconnecting: 'reconnecting…',
+  signOut: 'sign out',
+
+  tiles: {
+    lastHour: 'Last hour',
+    last24h: 'Last 24 hours',
+    last30d: 'Last 30 days',
+    sustainedRate: 'Sustained rate',
+    noneRefused: 'none refused',
+    refused: '{n} refused',
+    avgWait: 'avg wait {v}',
+    errorResponses: '{n} error responses',
+    queued: 'queued {n}',
+    perMin: '{n}/min',
+  },
+
+  budget: {
+    heading: 'Budget',
+    tokensBanked: 'Shared bucket',
+    inFlight: 'In flight',
+    queued: 'Queued',
+    backoff: 'Backoff',
+    none: '—',
+    reserveNote: '{n} reserved for latency-critical levels',
+    refusedBreakdown: 'Refused: {rate} rate limit · {challenge} challenge · {token} per-token',
+  },
+
+  levels: {
+    heading: 'Priority levels',
+    level: 'Priority',
+    health: 'Health',
+    share: 'Share',
+    guaranteed: 'Guaranteed',
+    queued: 'Queued',
+    oldestWait: 'Oldest wait',
+    banked: 'Banked',
+    latency: 'Latency, last hour',
+    latencyHint: 'Average and median of what the consumer waits: our queue plus osu!, from request to response.',
+    idle: 'idle',
+    keepingUp: 'keeping up',
+    busy: 'busy',
+    behind: 'behind',
+    stalled: 'stalled',
+  },
+
+  usage: {
+    heading: 'API usage',
+    hour: 'Hour',
+    day: 'Day',
+    month: 'Month',
+    year: 'Year',
+    empty: 'No requests recorded in this window yet.',
+    caption: '{total} requests · one bar per {bucket}',
+    other: 'Other',
+    ariaLabel: 'Requests per interval, stacked by consumer',
+  },
+
+  consumers: {
+    heading: 'By consumer',
+    consumer: 'Consumer',
+    requests: 'Requests',
+    share: 'Share',
+    avgWait: 'Avg wait',
+    empty: 'Nothing yet.',
+  },
+
+  queue: {
+    heading: 'Queued now',
+    empty: '— empty',
+    waitingCount: '— {n} waiting',
+    waitingTruncated: '— {n} waiting, showing first {shown}',
+    position: '#',
+    path: 'Path',
+    waiting: 'Waiting',
+    none: 'Nothing queued.',
+  },
+
+  feed: {
+    heading: 'Live requests',
+    time: 'Time',
+    status: 'Status',
+    waited: 'Waited',
+  },
+
+  footer: {
+    name: 'osu! API scheduler {version}',
+    licence: 'AGPL-3.0',
+    source: 'source code',
+  },
+  units: { seconds: '{n}s', minutes: '{n}min', hours: '{n}h', days: '{n}d' },
+  error: { load: 'Could not load the dashboard data.' },
+} as const;

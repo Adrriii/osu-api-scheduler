@@ -1,0 +1,32 @@
+# osu! API scheduler — nginx reverse proxy.
+#
+# TLS: certbot --nginx -d osu-api.example.com
+#
+# The /api/* proxy endpoint is protected by the scheduler's own token, so it is
+# safe to expose. To keep it private instead, uncomment the deny block.
+
+server {
+    listen 80;
+    server_name osu-api.example.com;
+
+    # location ~ ^/api(/|$) { deny all; }
+
+    # Server-sent events: buffering off, long read timeout, HTTP/1.1 required.
+    location /dash/live {
+        proxy_pass http://127.0.0.1:7654/dash/live;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:7654;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

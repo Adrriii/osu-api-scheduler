@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build output
+web/dist/
+
+# runtime state: metrics database, generated secrets, the live pace file.
+# Never commit these; session_secret and token are credentials.
+data/
+state/
+*.db
+*.db-shm
+*.db-wal
+
+# local config
+.env
+.env.*
+!.env.example
+
+# editor / scratch
+*.bak
+*.log
+*~
+.DS_Store
+
+# typescript build metadata
+*.tsbuildinfo

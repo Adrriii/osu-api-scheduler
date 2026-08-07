@@ -1,0 +1,43 @@
+[Unit]
+Description=osu! API scheduler
+Documentation=https://github.com/Adrriii/osu-api-scheduler
+After=network.target
+
+[Service]
+Type=simple
+User=osu-api-scheduler
+Group=osu-api-scheduler
+WorkingDirectory=/opt/osu-api-scheduler
+EnvironmentFile=/etc/osu-api-scheduler/scheduler.env
+
+# tsx as an ESM loader: the server runs from TypeScript source, so what is
+# deployed is what you can read.
+ExecStart=/usr/bin/env node --import tsx server/src/index.ts
+
+# Everything else on the host waits on this one, so come back fast.
+Restart=always
+RestartSec=2
+# In-flight callers are holding open HTTP connections; let them be answered
+# or time out rather than being cut mid-request.
+TimeoutStopSec=20
+
+# Hardening. The scheduler needs outbound network, its state directory, and
+# nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/osu-api-scheduler
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=osu-api-scheduler
+
+[Install]
+WantedBy=multi-user.target

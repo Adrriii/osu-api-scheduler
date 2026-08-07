@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="osu! API scheduler">
+  <!--
+    Three bars of descending length: a priority queue, which is what the thing
+    does. osu! pink so it is recognisable next to the other osu! tabs someone
+    will have open, solid so it reads against both a light and a dark browser
+    chrome without a media query, and only three shapes so it survives being
+    drawn at 16px.
+  -->
+  <rect width="32" height="32" rx="7" fill="#ff66ab"/>
+  <g fill="#fff">
+    <rect x="6" y="6"    width="20" height="5" rx="2.5"/>
+    <rect x="6" y="13.5" width="13" height="5" rx="2.5"/>
+    <rect x="6" y="21"   width="8"  height="5" rx="2.5"/>
+  </g>
+</svg>

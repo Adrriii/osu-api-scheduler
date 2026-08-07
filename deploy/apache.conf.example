@@ -1,0 +1,32 @@
+# osu! API scheduler — Apache reverse proxy.
+#
+# Enable first:  a2enmod proxy proxy_http headers rewrite
+# TLS:           certbot --apache -d osu-api.example.com
+#
+# The /api/* proxy endpoint is protected by the scheduler's own token, so it is
+# safe to expose. If you would rather keep it private, uncomment the deny block.
+
+<VirtualHost *:80>
+	ServerName osu-api.example.com
+
+	ProxyRequests Off
+	ProxyPreserveHost On
+
+	# <LocationMatch "^/api(/|$)">
+	# 	Require all denied
+	# </LocationMatch>
+
+	# Server-sent events for the live feed: no buffering, and a long timeout so
+	# an idle connection is not cut between requests.
+	<Location "/dash/live">
+		ProxyPass        http://127.0.0.1:7654/dash/live flushpackets=on timeout=3600
+		ProxyPassReverse http://127.0.0.1:7654/dash/live
+		SetEnv proxy-sendchunked 1
+	</Location>
+
+	ProxyPass        / http://127.0.0.1:7654/
+	ProxyPassReverse / http://127.0.0.1:7654/
+
+	ErrorLog  ${APACHE_LOG_DIR}/osu-api-scheduler.error.log
+	CustomLog ${APACHE_LOG_DIR}/osu-api-scheduler.access.log combined
+</VirtualHost>

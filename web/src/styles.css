@@ -1,0 +1,168 @@
+/*
+ * Light and dark are both selected, not an automatic inversion: the dark values
+ * are their own steps chosen against the dark surface. The data-theme scope
+ * wins over the OS preference in both directions so a future theme toggle can
+ * override either way.
+ */
+:root {
+  color-scheme: light;
+  --plane: #f9f9f7;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --accent: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --plane: #0d0d0d;
+    --surface-1: #1a1a19;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --accent: #3987e5;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --plane: #0d0d0d;
+  --surface-1: #1a1a19;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --accent: #3987e5;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: var(--plane);
+  color: var(--text-primary);
+  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.wrap { max-width: 1180px; margin: 0 auto; }
+
+header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+h2 { font-size: 13px; margin: 0 0 14px; font-weight: 650; color: var(--text-secondary); }
+h2.flush { margin: 0; }
+.spacer { flex: 1; }
+.sub { color: var(--muted); font-size: 13px; }
+a { color: var(--accent); }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); display: inline-block; }
+.dot.stale { background: var(--critical); }
+
+.lang {
+  font: inherit; font-size: 13px; padding: 3px 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary);
+}
+
+.card {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; margin-bottom: 16px;
+}
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.tile .k, .stats .k { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.tile .v, .stats .v { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+.tile .m { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.stats { display: flex; gap: 28px; flex-wrap: wrap; align-items: baseline; }
+.stats .of { font-size: 14px; color: var(--muted); font-weight: 400; }
+
+.meter { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; margin-top: 10px; }
+.meter > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.meter-marked { position: relative; overflow: visible; }
+.meter-marked .mark {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--text-secondary); opacity: 0.65;
+}
+
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+button.range {
+  font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
+}
+button.range[aria-pressed='true'] {
+  background: var(--text-primary); color: var(--plane); border-color: var(--text-primary);
+}
+
+.figure { margin: 0; }
+.grid { stroke: var(--grid); stroke-width: 1; }
+.axis { stroke: var(--axis); stroke-width: 1; }
+.axis-label { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 8px; }
+figcaption { font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  /* Widths come from the colgroup, not the contents. Without this every table
+     re-lays itself out as values change: a status word gets longer, a path is
+     wider than the last one, a count gains a digit, and the columns jump while
+     you are reading them. */
+  table-layout: fixed;
+}
+/* Fixed columns mean overflow has to be handled rather than pushing the layout. */
+th, td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+td { padding: 6px 8px; border-bottom: 1px solid var(--grid); color: var(--text-secondary); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tabular { font-variant-numeric: tabular-nums; }
+tbody tr:last-child td { border-bottom: 0; }
+
+.feed {
+  /* Five rows plus the header, fixed rather than max: the live feed and the
+     queue both gain and lose rows constantly, and a height that tracked their
+     contents would shove everything below them up and down. */
+  --row: 32px;
+  height: calc(6 * var(--row));
+  overflow-y: auto;
+}
+/* Explicit row height so the arithmetic above holds regardless of font metrics. */
+.feed td, .feed th { height: var(--row); padding-top: 0; padding-bottom: 0; }
+/* The header stays put while the rows scroll under it. */
+.feed thead th { position: sticky; top: 0; background: var(--surface-1); z-index: 1; }
+.feed td.path { color: var(--text-primary); }
+/* An empty panel keeps the same height rather than collapsing. */
+.feed .empty { padding: 0; }
+.scroll { overflow-x: auto; }
+
+.tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); }
+.status { font-weight: 600; }
+.good { color: var(--good); }
+.warning { color: var(--warning); font-weight: 600; }
+.serious { color: var(--serious); font-weight: 600; }
+.critical { color: var(--critical); font-weight: 600; }
+.muted { color: var(--muted); }
+.bad { color: var(--critical); }
+.empty { color: var(--muted); padding: 28px 8px; text-align: center; white-space: normal; }
+
+.foot {
+  display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+  margin: 28px 0 8px; padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+}
+.foot a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.foot a:hover { color: var(--text-secondary); }
