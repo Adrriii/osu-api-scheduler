@@ -73,10 +73,11 @@ body {
 .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cell { min-width: 0; }
 .cell > .card, .side > .card { margin-bottom: 0; }
-/* A card matched to a taller neighbour hands the extra height to its scroller,
-   so the room shows as more rows rather than as a gap under five of them. */
 .cell > .card { display: flex; flex-direction: column; height: 100%; }
-.cell > .card > .feed { flex: 1 1 auto; height: auto; min-height: calc(6 * var(--row)); }
+/* Five rows and then a scrollbar, whatever height the card ends up with. Given
+   room to grow it took all of it: the feed holds 150 rows, so "as tall as its
+   contents" is as tall as the page. */
+.cell > .card > .feed { flex: 0 0 auto; height: calc(6 * var(--row)); }
 
 .s9 { grid-column: span 9; }
 .s6 { grid-column: span 6; }

@@ -45,19 +45,16 @@ export function App() {
       {error && <p className="card critical">{t.error.load}</p>}
 
       {/*
-        Reading order is the order the questions get asked: is it fine, who is
-        asking, then the detail behind both. Across is grouping -- the headline
-        beside the consumers it is the sum of, and the two live tables beside
-        each other because they are read together. The playfield holds the right
-        edge and fills whatever height the rows beside it come to; the queue sits
-        directly beneath it, being the same requests it is showing, and the live
-        feed beside the chart, being what the chart is made of.
-      */}
-      {/*
-        Two regions rather than one grid. Nothing lines up across them, and
-        nothing needs to: a panel matched to its neighbour's height is a panel
-        padded out below its contents, which is where all the empty space came
-        from. Each is as tall as what it holds.
+        A flowing region and a fixed column. Reading order is the order the
+        questions get asked: is it fine, who is asking, then the detail behind
+        both. What sits next to what is grouping -- the headline beside the
+        consumers it is the sum of, the live feed under the chart it is made of,
+        and the queue under the playfield, being the same requests it shows.
+
+        The two regions are deliberately not tied to each other's heights. That
+        is what stretched whole rows to match the playfield; panels sharing a row
+        within the region still line up, because one stopping short of its
+        neighbour leaves a hole in the page.
       */}
       <div className="dash">
         <div className="main">
@@ -70,7 +67,7 @@ export function App() {
             {snapshot && summary && <Levels s={snapshot} latency={summary.latency} />}
           </div>
 
-          <div className="cell s6">
+          <div className="cell s9">
             <section className="card">
               <div className="row">
                 <h2 className="flush">{t.usage.heading}</h2>
@@ -89,8 +86,10 @@ export function App() {
               {summary && <UsageChart data={summary} />}
             </section>
           </div>
-          {/* What the chart is made of, beside the chart. */}
-          <div className="cell s3"><Feed rows={feed} /></div>
+          {/* Under the chart rather than beside it: it is what the chart is
+              made of, but a five-row scroller cannot share a row with something
+              twice its height without one of them ending in a gap. */}
+          <div className="cell s9"><Feed rows={feed} /></div>
         </div>
 
         {/* The playfield keeps the height it is given here rather than taking it
