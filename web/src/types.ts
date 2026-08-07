@@ -18,6 +18,8 @@ export interface QueuedJob {
 export interface Snapshot {
   /** Server clock when this was taken, so the client can correct for skew. */
   now: number;
+  /** Requests delivered in a row, counted upstream so it is not capped by the feed. */
+  combo: number;
   sustainedPerMin: number;
   burst: { tokens: number; capacity: number; maxPerMin: number; reserve: number; availableToBulk: number };
   levels: Record<string, LevelState>;

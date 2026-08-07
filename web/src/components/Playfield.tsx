@@ -48,8 +48,8 @@ const RUNWAY = 46;
  * a height short of the line and taken slowly, a note that has waited one
  * second is a clear distance above one that has waited two.
  */
-const HOLD = 0.88;
-const SETTLE_MS = 5000;
+const HOLD = 0.95;
+const SETTLE_MS = 4000;
 
 /** Lanes stay a fixed ramp by priority; only the notes carry consumer colour. */
 const LANE_COLOURS = ['#ff66ab', '#e35ba8', '#c25aa6', '#9d5cad', '#7c5cd6'];
@@ -78,8 +78,16 @@ export type Note = {
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-/** Where a note that has no known ending has got to, by age alone. */
-const settling = (elapsed: number) => HOLD * (1 - Math.exp(-elapsed / SETTLE_MS));
+/**
+ * Where a note that has no known ending has got to, by age alone.
+ *
+ * Hyperbolic rather than exponential, because an exponential is spent within a
+ * few multiples of its time constant: past about fifteen seconds every waiting
+ * note landed on the same pixel and a lane of them became one bar. This keeps
+ * giving ground -- twenty seconds of waiting is still visibly above forty, and
+ * forty above eighty -- so a backlog reads as a backlog.
+ */
+const settling = (elapsed: number) => HOLD * (elapsed / (elapsed + SETTLE_MS));
 
 /**
  * Where a note sits, 0 at the top and 1 on the line.
@@ -225,7 +233,7 @@ export function Playfield({
         consumer: r.consumer,
         path: r.path,
         seen: prior?.seen ?? 0,
-        bornAt: prior?.bornAt ?? now,
+        bornAt: prior?.bornAt ?? now - DELAY_MS,
       });
     }
 
@@ -241,7 +249,7 @@ export function Playfield({
         consumer: j.consumer,
         path: j.path,
         seen: 0,
-        bornAt: now,
+        bornAt: now - DELAY_MS,
       });
     }
 
@@ -348,12 +356,6 @@ export function Playfield({
   const attempted = served + failed + expired;
   const accuracy = attempted ? (served / attempted) * 100 : 100;
 
-  let combo = 0;
-  for (const r of feed) {
-    if (r.limiter || r.status >= 400 || r.status === 0) break;
-    combo++;
-  }
-
   return (
     <section className="card playfield">
       <h2>{t.playfield.heading}</h2>
@@ -387,7 +389,7 @@ export function Playfield({
         {/* Both readouts sit on the field, where osu! puts them: combo through
             the middle of the lanes, accuracy in the top corner. */}
         <text x={W / 2} y={LINE * 0.56} textAnchor="middle" className="pf-combo">
-          {combo}x
+          {s.combo ?? 0}x
         </text>
         <text x={W - 5} y={13} textAnchor="end" className="pf-acc">
           {accuracy.toFixed(2)}%

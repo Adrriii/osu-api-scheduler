@@ -55,6 +55,9 @@ export class Scheduler {
   private timer: NodeJS.Timeout | null = null;
   private stopping = false;
 
+  /** Requests delivered in a row. Broken by an error or a refusal. */
+  private combo = 0;
+
   private stats: Stats = {
     served: 0,
     failed: 0,
@@ -347,6 +350,8 @@ export class Scheduler {
         // limiters are told apart by body shape, and that is exactly the kind
         // of guess that goes stale without anyone noticing.
         this.stats.limited[res.limiter]++;
+        // Being turned away is exactly what a combo break means here.
+        this.combo = 0;
         const quiet = res.limiter === 'cloudflare-challenge'
           && Date.now() - this.lastChallengeLog < 30_000;
         if (!quiet) this.lastChallengeLog = Date.now();
@@ -394,6 +399,11 @@ export class Scheduler {
 
       const waitedMs = Date.now() - job.enqueuedAt;
       this.stats.served++;
+      // Counted here rather than derived by the dashboard from its feed: that
+      // buffer holds 150 rows, so a streak longer than that could not be
+      // expressed and sat at 150 forever.
+      if (res.status < 400) this.combo++;
+      else this.combo = 0;
       const perTier = (this.stats.perTier[job.tier] ??= { served: 0, waitMsTotal: 0 });
       perTier.served++;
       perTier.waitMsTotal += waitedMs;
@@ -402,6 +412,7 @@ export class Scheduler {
       job.settle({ ok: true, status: res.status, headers: res.headers, body: res.body, waitedMs });
     } catch (err) {
       this.stats.failed++;
+      this.combo = 0;
       // A transport failure is the broker's problem, not osu!'s verdict on the
       // request, so report it as a gateway error rather than faking a status.
       log.error('upstream request failed', { path: job.request.path, err: String(err) });
@@ -432,6 +443,7 @@ export class Scheduler {
       // be seconds off ours. Sending our own now lets it correct for that
       // rather than mixing the two.
       now: Date.now(),
+      combo: this.combo,
       sustainedPerMin: Math.round(60_000 / paceIntervalMs()),
       burst: {
         tokens: Math.floor(this.tokens),
