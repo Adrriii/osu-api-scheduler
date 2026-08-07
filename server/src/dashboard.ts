@@ -56,6 +56,10 @@ export function mountDashboard(app: Hono, scheduler: Scheduler): void {
      <meta name="color-scheme" content="light dark"><title>osu! API scheduler</title>
      <link rel="icon" href="/favicon.svg" type="image/svg+xml">
      <style>
+       /* Text inputs are content-box by default, so width:100% plus padding and
+          border spills past the form; buttons are border-box already, which is
+          why only the input overflowed. */
+       *{box-sizing:border-box}
        body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f9f9f7;color:#0b0b0b;
             font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
        @media (prefers-color-scheme:dark){body{background:#0d0d0d;color:#fff}form{background:#1a1a19!important;
