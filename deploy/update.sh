@@ -22,6 +22,14 @@ HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-60}"
 
 FORCE=0
 CHECK=0
+
+# `npm run update --force` hands the flag to npm rather than to this script, and
+# npm exports it as npm_config_force instead. Without this the flag is silently
+# swallowed and the run looks like it decided there was nothing to do, which is
+# indistinguishable from the flag working. Accept both spellings.
+[[ ${npm_config_force:-} == true ]] && FORCE=1
+[[ ${npm_config_check:-} == true ]] && CHECK=1
+
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=1 ;;
@@ -87,10 +95,15 @@ if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
 fi
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+[[ $BRANCH != HEAD ]] || die "this checkout is on a detached HEAD, so there is no branch to pull.
+       Check out a branch first: git checkout master"
+
 BEFORE="$(git rev-parse HEAD)"
-say "fetching $BRANCH"
-git fetch --quiet origin "$BRANCH"
-AFTER="$(git rev-parse "origin/$BRANCH")"
+say "fetching $BRANCH from origin"
+git fetch --quiet origin "$BRANCH" \
+  || die "git fetch failed; the pull cannot proceed"
+AFTER="$(git rev-parse "origin/$BRANCH" 2>/dev/null)" \
+  || die "no origin/$BRANCH after fetching; is the branch pushed?"
 
 if [[ "$BEFORE" == "$AFTER" && $FORCE -eq 0 ]]; then
   say "already up to date at ${BEFORE:0:8}; nothing to do (use --force to rebuild anyway)"
