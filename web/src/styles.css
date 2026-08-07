@@ -51,46 +51,48 @@ body {
 .wrap { width: min(100%, 1760px); margin: 0 auto; }
 
 /*
- * Twelve columns, so panels sit beside each other instead of one per line.
- * Cells stretch to their row's height and the card inside fills the cell, so a
- * pair lines up top and bottom instead of leaving a ragged step between them.
+ * A flowing region and a fixed column beside it.
+ *
+ * Panels within the region line up with each other. Nothing lines up across the
+ * two, and nothing needs to: every `height: 100%` here was a panel stretched to
+ * match a neighbour, and a panel stretched past its contents is exactly the
+ * empty space this was meant to remove. Each is now as tall as what it holds.
  */
 .dash {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) 431px;
   gap: 12px;
+  align-items: start;
 }
+.main {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cell { min-width: 0; }
-.cell > .card, .cell > section { margin-bottom: 0; height: 100%; }
-/* The scrollers keep their five rows and scroll. Letting them grow into a
-   stretched card made the two live tables the biggest things on the page, which
-   is backwards: they are for glancing at, not for reading through. */
-.cell > .card { display: flex; flex-direction: column; }
-.s12 { grid-column: span 12; }
+.cell > .card, .side > .card { margin-bottom: 0; }
+
 .s9 { grid-column: span 9; }
 .s6 { grid-column: span 6; }
 .s5 { grid-column: span 5; }
 .s4 { grid-column: span 4; }
 .s3 { grid-column: span 3; }
-.rspan2 { grid-row: span 2; }
 
-/* Breakpoints are set by what each panel needs, not by device names. The chart
-   and the levels table are the widest things here, so they give up their
-   neighbours first. */
+/* Breakpoints are set by what each panel needs, not by device names. */
 @media (max-width: 1500px) {
-  /* The queue and the feed have the most columns for their width, so they are
-     the first to want a whole row between them. */
-  .s6 { grid-column: span 8; }
-  .s3 { grid-column: span 4; }
-  .s5 { grid-column: span 5; }
-  .s9 { grid-column: span 8; }
+  /* The chart and the feed have the most to fit for their width, so they are
+     the first to want a whole row each. */
+  .s6, .s3 { grid-column: span 9; }
 }
 @media (max-width: 1180px) {
-  .s5, .s4, .s6, .s9 { grid-column: span 12; }
-  /* Still beside something rather than below everything: being tall and to one
-     side is the whole point of it. */
-  .s3 { grid-column: span 6; }
-  .rspan2 { grid-row: span 1; }
+  /* The column goes under the region rather than squeezing it to nothing.
+     Its two panels then sit side by side, which is the same amount of page. */
+  .dash { grid-template-columns: minmax(0, 1fr); }
+  .side { flex-direction: row; flex-wrap: wrap; }
+  .side > * { flex: 1 1 320px; }
+  .s5, .s4 { grid-column: span 9; }
 }
 
 /* ---- the banner ---------------------------------------------------------- */
@@ -310,7 +312,10 @@ tbody tr:last-child td { border-bottom: 0; }
 /* No heading, and no padding: the panel *is* the field, edge to edge. Its
    height comes from the space it is given rather than from its own width, so it
    fills whatever slot it sits in instead of forcing its neighbours to match. */
-.playfield { overflow: hidden; padding: 0; position: relative; }
+/* Height is set here rather than taken from whatever sits beside it. It is the
+   one panel whose size is a design decision instead of a consequence of its
+   contents. */
+.playfield { overflow: hidden; padding: 0; position: relative; height: 430px; }
 /* osu!'s own two readouts, carrying real numbers: accuracy is the delivered
    share of everything attempted, combo the run of requests since the last
    refusal. A combo break is exactly the moment osu! turned us away.
