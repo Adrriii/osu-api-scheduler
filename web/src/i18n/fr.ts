@@ -67,6 +67,11 @@ export const fr: Dict = {
     ariaLabel: 'Requêtes par intervalle, groupées par client',
   },
 
+  playfield: {
+    heading: 'Terrain de jeu',
+    ariaLabel: 'Requêtes en attente sur cinq couloirs de priorité, la plus proche du départ en bas',
+  },
+
   consumers: {
     heading: 'Par client',
     consumer: 'Client',

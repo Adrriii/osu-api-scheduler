@@ -67,19 +67,29 @@ body {
    is backwards: they are for glancing at, not for reading through. */
 .cell > .card { display: flex; flex-direction: column; }
 .s12 { grid-column: span 12; }
+.s9 { grid-column: span 9; }
 .s8 { grid-column: span 8; }
 .s6 { grid-column: span 6; }
 .s4 { grid-column: span 4; }
+.s3 { grid-column: span 3; }
+.rspan2 { grid-row: span 2; }
 
 /* Breakpoints are set by what each panel needs, not by device names. The chart
    and the levels table are the widest things here, so they give up their
    neighbours first. */
 @media (max-width: 1400px) {
+  .s9 { grid-column: span 8; }
   .s8 { grid-column: span 12; }
+  .s6 { grid-column: span 8; }
   .s4 { grid-column: span 12; }
+  /* The playfield stays beside the headline rather than dropping below it: it
+     is the one panel whose whole point is being tall and to one side. */
+  .s3 { grid-column: span 4; }
 }
 @media (max-width: 1080px) {
-  .s6 { grid-column: span 12; }
+  .s9, .s6 { grid-column: span 12; }
+  .s3 { grid-column: span 6; }
+  .rspan2 { grid-row: span 1; }
 }
 
 /* ---- the banner ---------------------------------------------------------- */
@@ -301,6 +311,40 @@ tbody tr:last-child td { border-bottom: 0; }
 .muted { color: var(--muted); }
 .bad { color: var(--critical); }
 .empty { color: var(--muted); padding: 28px 8px; text-align: center; white-space: normal; }
+
+/* ---- playfield ----------------------------------------------------------- */
+
+.playfield { overflow: hidden; }
+.pf-hud { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+/* osu!'s own two readouts, carrying real numbers: accuracy is the delivered
+   share of everything attempted, combo the run of requests since the last
+   refusal. A combo break is exactly the moment osu! turned us away. */
+.pf-acc { font-size: 15px; font-weight: 800; color: var(--text-secondary); }
+.pf-combo { font-size: 19px; font-weight: 800; color: var(--pink); }
+
+.pf-svg { width: 100%; height: auto; display: block; flex: 1; min-height: 0; }
+.pf-lane { fill: rgba(0, 0, 0, 0.28); }
+.pf-line { stroke: rgba(255, 255, 255, 0.35); stroke-width: 2; }
+.pf-key { font-size: 9px; fill: var(--muted); font-weight: 700; letter-spacing: 0.08em; }
+
+/* Notes move because the queue moved, so the transition is on position only:
+   a note gliding down means the one ahead of it was served. */
+.pf-note { transition: y 400ms ease-out; }
+
+.pf-hit {
+  animation: pf-hit 520ms ease-out forwards;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes pf-hit {
+  0% { opacity: 0.95; transform: scaleY(1.6); }
+  100% { opacity: 0; transform: scaleY(0.4); }
+}
+/* A dispatch is a real event, but a flashing panel is not worth a headache. */
+@media (prefers-reduced-motion: reduce) {
+  .pf-note { transition: none; }
+  .pf-hit { animation: none; opacity: 0.6; }
+}
 
 .foot {
   display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;

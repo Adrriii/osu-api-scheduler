@@ -65,6 +65,11 @@ export const en = {
     ariaLabel: 'Requests per interval, stacked by consumer',
   },
 
+  playfield: {
+    heading: 'Playfield',
+    ariaLabel: 'Queued requests as five priority lanes, newest at the judgement line',
+  },
+
   consumers: {
     heading: 'By consumer',
     consumer: 'Consumer',
