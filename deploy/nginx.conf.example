@@ -23,6 +23,12 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:7654;
+        # A restart is brief but not instant, and under Docker there is no
+        # socket to hold the connections across it. Retrying once picks the
+        # scheduler back up rather than handing the caller a 502.
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_connect_timeout 2s;
         proxy_http_version 1.1;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;

@@ -11,6 +11,8 @@
 [![Docker](https://img.shields.io/badge/docker-compose-ff66ab?style=flat-square)](docker-compose.yml)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-ff66ab?style=flat-square)](#run-your-own)
 
+<img src="docs/scheduler.gif" width="820" alt="The dashboard: request rate against the ceiling, per-priority queues and banks, usage by project, and a lane per priority level with one note per request.">
+
 </div>
 
 ---
@@ -227,6 +229,12 @@ latency, not errors.
 
 The socket is installed and enabled by `deploy/install.sh`. Under Docker there
 is no equivalent, so a restart there is a real gap of a few seconds.
+
+If you run it behind Apache, `retry=0` on the `ProxyPass` is not optional. After
+one refused connection Apache marks the backend down and answers 502 for the
+next sixty seconds without trying it again, so a two second restart costs a
+minute of failed requests. The template in `deploy/` sets it; the nginx one
+retries once for the same reason.
 
 ### Releasing
 

@@ -19,12 +19,17 @@
 	# Server-sent events for the live feed: no buffering, and a long timeout so
 	# an idle connection is not cut between requests.
 	<Location "/dash/live">
-		ProxyPass        http://127.0.0.1:7654/dash/live flushpackets=on timeout=3600
+		ProxyPass        http://127.0.0.1:7654/dash/live flushpackets=on timeout=3600 retry=0
 		ProxyPassReverse http://127.0.0.1:7654/dash/live
 		SetEnv proxy-sendchunked 1
 	</Location>
 
-	ProxyPass        / http://127.0.0.1:7654/
+	# retry=0 is not optional here. After one refused connection Apache marks
+	# the backend down and answers 502 for the next 60 seconds without trying it
+	# again -- so a two second restart costs a minute of failed requests. With
+	# retry=0 it tries again on the very next request, and a restart costs only
+	# the requests actually made while it was down.
+	ProxyPass        / http://127.0.0.1:7654/ retry=0
 	ProxyPassReverse / http://127.0.0.1:7654/
 
 	ErrorLog  ${APACHE_LOG_DIR}/osu-api-scheduler.error.log
