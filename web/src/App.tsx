@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useDashboard } from './api.js';
 import { LOCALES, useI18n, type Locale } from './i18n/index.js';
 import { UsageChart } from './components/UsageChart.js';
-import { Budget, Consumers, Feed, Levels, QueuePanel, Tiles } from './components/Panels.js';
+import { Consumers, Feed, Levels, QueuePanel, Status, Tiles } from './components/Panels.js';
 import { Footer } from './components/Footer.js';
 
 type Range = 'hour' | 'day' | 'month' | 'year';
@@ -43,8 +43,10 @@ export function App() {
 
       {error && <p className="card critical">{t.error.load}</p>}
 
+      {/* Order is the answer to "is it fine", then "how much have I used",
+          then the detail behind both. */}
+      {snapshot && <Status s={snapshot} />}
       {summary && <Tiles data={summary} />}
-      {snapshot && <Budget s={snapshot} />}
       {snapshot && summary && <Levels s={snapshot} latency={summary.latency} />}
 
       <section className="card">

@@ -129,13 +129,52 @@ a { color: var(--pink); }
 .stats { display: flex; gap: 28px; flex-wrap: wrap; align-items: baseline; }
 .stats .of { font-size: 14px; color: var(--muted); font-weight: 500; }
 
+/* ---- the headline -------------------------------------------------------- */
+
+.hero { padding: 18px 20px 14px; }
+.hero-state { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+/* The icon carries the state alongside the word, so the colour is never the
+   only thing saying it. */
+.hero-icon { font-size: 26px; line-height: 1; }
+.hero-word { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.hero-detail { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+.hero-state.good .hero-icon, .hero-state.good .hero-word { color: var(--good); }
+.hero-state.warning .hero-icon, .hero-state.warning .hero-word { color: var(--warning); }
+.hero-state.serious .hero-icon, .hero-state.serious .hero-word { color: var(--serious); }
+.hero-state.critical .hero-icon, .hero-state.critical .hero-word { color: var(--critical); }
+
+.hero-counts { display: flex; gap: 26px; align-items: baseline; flex-wrap: wrap; }
+.hero-counts > div { display: flex; flex-direction: column; gap: 2px; }
+.hero-counts .k {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.06em; font-weight: 700;
+}
+.hero-counts .v { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.hero-counts .of { font-size: 13px; color: var(--muted); font-weight: 600; }
+.hero-foot { margin: 10px 0 0; }
+.hero .meter { margin-top: 16px; }
+
 .meter { height: 8px; border-radius: 999px; background: var(--grid); overflow: hidden; margin-top: 10px; }
 .meter > i { display: block; height: 100%; background: linear-gradient(90deg, #8f2a94, var(--pink)); border-radius: 999px; }
-.meter-marked { position: relative; overflow: visible; }
+.meter-marked { position: relative; overflow: visible; margin-bottom: 18px; }
 .meter-marked .mark {
-  position: absolute; top: -2px; bottom: -2px; width: 2px;
-  background: var(--text-secondary); opacity: 0.65;
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--text-secondary); opacity: 0.7;
 }
+/* The threshold says what it is, on the axis it applies to, instead of being
+   explained in a sentence somewhere below the bar. */
+.mark-label {
+  position: absolute; top: 12px; left: 0; transform: translateX(-50%);
+  font-size: 11px; color: var(--muted); white-space: nowrap;
+}
+
+/* In-row bar. Magnitude is read off the length; the number stays for the exact
+   value, in text ink rather than in the bar's colour. */
+.bank { display: flex; align-items: center; gap: 8px; }
+.bank .meter { margin-top: 0; flex: 1; min-width: 40px; }
+.bank-v { font-size: 12px; color: var(--text-secondary); width: 40px; text-align: right; flex: none; }
+.meter-flat > i { background: var(--axis); }
+.levels .level-name { color: var(--text-primary); font-weight: 700; }
 
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 button.range {
@@ -153,6 +192,9 @@ button.range[aria-pressed='true'] {
 .grid { stroke: var(--grid); stroke-width: 1; }
 .axis { stroke: var(--axis); stroke-width: 1; }
 .axis-label { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+/* A limit, not a series: dashed and in text ink so it never reads as data. */
+.ceiling { stroke: var(--text-secondary); stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.75; }
+.ceiling-label { font-size: 11px; fill: var(--text-secondary); font-weight: 700; }
 
 .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--text-secondary); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }

@@ -49,10 +49,26 @@ export function UsageChart({ data }: { data: Summary }) {
 
   const iw = W - PAD.l - PAD.r;
   const ih = H - PAD.t - PAD.b;
-  const max = Math.max(...buckets.map((b) => b.n), 1);
+  const peak = Math.max(...buckets.map((b) => b.n), 1);
+
+  /**
+   * What the sustained rate allows in one bucket. The question this chart is
+   * opened with is "how much of the budget am I using", and counts alone cannot
+   * answer it -- 900 requests an hour means nothing until you know the hour
+   * holds 3600.
+   *
+   * Only drawn once usage is within reach of it. Below that the line sits so
+   * far above the bars that it flattens them to nothing and answers a question
+   * no one was asking.
+   */
+  const ceiling = data.live.sustainedPerMin * (data.bucketMs / 60_000);
+  const showCeiling = ceiling > 0 && peak >= ceiling * 0.4;
+  const max = showCeiling ? Math.max(peak, ceiling) : peak;
+
   const step = iw / buckets.length;
   const bw = Math.max(1, step - 2);
   const ticks = [0, Math.round(max / 2), max];
+  const ceilingY = PAD.t + ih - (ceiling / max) * ih;
 
   const labelIdx = [0, Math.floor(buckets.length / 2), buckets.length - 1];
   const total = buckets.reduce((a, b) => a + b.n, 0);
@@ -113,6 +129,17 @@ export function UsageChart({ data }: { data: Summary }) {
             </g>
           );
         })}
+
+        {/* Drawn over the bars: it is a threshold they are read against, so it
+            has to stay visible where they cross it. */}
+        {showCeiling && (
+          <g>
+            <line x1={PAD.l} x2={W - PAD.r} y1={ceilingY} y2={ceilingY} className="ceiling" />
+            <text x={W - PAD.r} y={ceilingY - 6} textAnchor="end" className="ceiling-label">
+              {`${fmt(Math.round(ceiling))} ${t.usage.ceiling}`}
+            </text>
+          </g>
+        )}
 
         <line x1={PAD.l} x2={W - PAD.r} y1={PAD.t + ih} y2={PAD.t + ih} className="axis" />
         {labelIdx.map((i) => {
