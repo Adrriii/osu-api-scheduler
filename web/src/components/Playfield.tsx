@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '../i18n/index.js';
 import type { RequestRow, Snapshot } from '../types.js';
 
@@ -7,17 +7,17 @@ import type { RequestRow, Snapshot } from '../types.js';
  * a mania playfield, so this is the one panel that could not belong to anything
  * but an osu! tool.
  *
- * It is for watching, not for reading -- the tables have the numbers. What it
- * shows is movement: a lane whose notes keep reaching the line is being served,
- * and one whose notes pile up on it is not. That is the failure this service
- * exists to prevent, and a column of numbers is bad at showing it.
+ * The field runs two seconds behind reality, and that delay is what makes it
+ * honest. Drawing a note at time T, we already hold everything that happened up
+ * to T+2, so a request that finishes quickly is animated to land on the line at
+ * exactly the moment it really landed -- no guessing, no correction after the
+ * fact.
  *
- * Height is time. A note's distance from the line is how long until that
- * request is due to be sent, so the field scrolls at a constant rate and a note
- * lands on the line at the moment it is expected to go. That is what makes it
- * gameplay rather than a queue drawn vertically: nothing is placed by its index
- * and nothing jumps when the queue shifts. A note keeps the arrival time it was
- * given and scrolls to meet it.
+ * A request that outlives the buffer is the interesting case. Nominal speed is
+ * one field per second, and past that a note eases back by an amount set by how
+ * long its own request is taking, holding off the line for as long as the
+ * request really runs and then crossing exactly when it finished. So a slow
+ * request looks slow while it is slow, and still lands truthfully.
  */
 
 const W = 220;
@@ -27,150 +27,174 @@ const LANE_W = W / LANES.length;
 const LINE = 270;
 const NOTE_H = 13;
 
-/** Seconds of runway visible above the line. Sets the scroll speed. */
-const LOOKAHEAD_MS = 15_000;
-const SPEED = LINE / LOOKAHEAD_MS; // px per ms
+/** How far behind reality the field is drawn. The whole design rests on it. */
+const DELAY_MS = 2000;
+/** A request is expected to take this long: one field per second. */
+const NOMINAL_MS = 1000;
 
-/**
- * Sequential by priority rather than categorical: the lanes are ordered, and
- * osu! pink belongs to the level that cannot wait. Deliberately not the chart's
- * palette, which identifies consumers -- reusing it here would imply the two
- * meant the same thing.
- */
 const LANE_COLOURS = ['#ff66ab', '#e35ba8', '#c25aa6', '#9d5cad', '#7c5cd6'];
 
-/** The queue carries no id, so identity is what the request actually is. */
-const idOf = (j: { tier: string; consumer: string; path: string }) =>
-  `${j.tier}|${j.consumer}|${j.path}`;
+const idOf = (r: { tier: string; consumer: string; path: string }) =>
+  `${r.tier}|${r.consumer}|${r.path}`;
 
-export type Note = { lane: number; eta: number; consumer: string; path: string };
+export type Note = {
+  lane: number;
+  startedAt: number;
+  endedAt: number | null;
+  consumer: string;
+  path: string;
+};
+
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
- * Give every queued request the time it is due to be sent, and keep it.
+ * Where a note sits, 0 at the top and 1 on the line.
  *
- * Handing out arrival times once and never revising them is what makes this
- * gameplay rather than a queue drawn vertically. Revising on every poll is what
- * made notes jump: a job one place further up would be re-placed a step lower
- * each time the queue moved. Keeping the time means the note carries on falling
- * toward it, and the one in front being served changes nothing behind it.
+ * One curve covers every case, shaped by how long the request itself takes:
  *
- * Exported so the timing can be tested without a browser.
+ *   p = 1 - (1 - x)^r,  x = elapsed / duration,  r = 1 + ln(duration / 1s)
+ *
+ * At a one-second request r is 1 and that is a straight line, which is why it
+ * meets the constant-speed case below without a seam. Longer requests bend
+ * further, so a note falls freely at first and then holds off the line for as
+ * long as its request really runs.
+ *
+ * While a request is still in flight its duration is unknown, but not
+ * unbounded: the field is drawn two seconds in the past, and the request had
+ * not finished as of the newest thing we hold, so it has already lasted at
+ * least `elapsed + 2s`. Feeding that lower bound to the same curve keeps a note
+ * off the line without capping it anywhere, and because the bound grows exactly
+ * as fast as the delay is long, it *equals* the real duration at the instant
+ * the ending arrives. The curve therefore never steps when the answer lands --
+ * there is no catch-up phase, because there is nothing to catch up.
+ *
+ * Exported so the curve can be checked without a browser.
  */
-export function schedule(
-  notes: Map<string, Note>,
-  queue: Snapshot['queue'],
-  levels: Snapshot['levels'],
-  now: number,
-): Map<string, Note> {
-  const live = new Set((queue ?? []).map(idOf));
-  for (const key of [...notes.keys()]) {
-    if (!live.has(key)) notes.delete(key);
+export function progress(n: Note, displayNow: number): number {
+  const actual = n.endedAt === null ? null : n.endedAt - n.startedAt;
+
+  // Anything inside the nominal second travels at the baseline speed and simply
+  // starts its fall earlier, so every quick request falls identically and the
+  // field has one recognisable rhythm. Checked before the guard below, because
+  // such a note begins falling before its own request started -- a 0.4s request
+  // is on the field for 0.6s before there is anything to wait for.
+  if (actual !== null && actual <= NOMINAL_MS) {
+    return clamp01((displayNow - (n.endedAt! - NOMINAL_MS)) / NOMINAL_MS);
   }
 
-  // New arrivals go behind whatever that lane already holds, spaced by how
-  // often the level actually gets to send. A slow lane's notes are far apart
-  // because its requests really are further away.
-  const backOf = new Map<number, number>();
-  for (const n of notes.values()) {
-    backOf.set(n.lane, Math.max(backOf.get(n.lane) ?? 0, n.eta));
-  }
+  const elapsed = displayNow - n.startedAt;
+  if (elapsed <= 0) return 0;
 
-  for (const job of queue ?? []) {
-    const key = idOf(job);
-    if (notes.has(key)) continue;
-    const lane = LANES.indexOf(job.tier);
-    if (lane < 0) continue;
-
-    const perMin = levels[job.tier]?.perMin ?? 1;
-    const gap = 60_000 / Math.max(1, perMin);
-    const eta = Math.max(now, backOf.get(lane) ?? 0) + gap;
-    backOf.set(lane, eta);
-    notes.set(key, { lane, eta, consumer: job.consumer, path: job.path });
-  }
-  return notes;
+  const d = actual ?? Math.max(NOMINAL_MS, elapsed + DELAY_MS);
+  const x = clamp01(elapsed / d);
+  const r = 1 + Math.log(d / NOMINAL_MS);
+  return 1 - Math.pow(1 - x, r);
 }
 
 export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
   const { t } = useI18n();
-  const scroller = useRef<SVGGElement | null>(null);
-  const notes = useRef(new Map<string, Note>());
 
-  const { placed, tref } = useMemo(() => {
-    const now = Date.now();
-    schedule(notes.current, s.queue, s.levels, now);
-    return { placed: [...notes.current.values()], tref: now };
-  }, [s]);
+  const notes = useRef(new Map<string, Note>());
+  const rects = useRef(new Map<string, SVGRectElement | null>());
+  const flashUntil = useRef<number[]>(LANES.map(() => 0));
+  const flashes = useRef<(SVGRectElement | null)[]>([]);
+  const crossed = useRef(new Set<string>());
 
   /**
-   * One transform for the whole field, moved on every frame. Every note travels
-   * at the same speed, so scrolling is a single mutation rather than a React
-   * render per frame.
+   * Two sources, because neither alone is complete. A finished request carries
+   * its own history -- it started `waitedMs` before it was recorded -- and that
+   * is enough to draw its whole fall, because the field has not got there yet.
+   * Anything still queued has no ending to give, so it gets a start and waits
+   * for one.
+   */
+  const drawn = useMemo(() => {
+    const now = Date.now();
+    for (const r of feed) {
+      const key = idOf(r);
+      const existing = notes.current.get(key);
+      if (existing && existing.endedAt !== null) continue;
+      const lane = LANES.indexOf(r.tier);
+      if (lane < 0) continue;
+      notes.current.set(key, {
+        lane,
+        startedAt: r.ts - r.waitedMs,
+        endedAt: r.ts,
+        consumer: r.consumer,
+        path: r.path,
+      });
+    }
+
+    for (const j of s.queue ?? []) {
+      const key = idOf(j);
+      if (notes.current.has(key)) continue;
+      const lane = LANES.indexOf(j.tier);
+      if (lane < 0) continue;
+      notes.current.set(key, {
+        lane,
+        startedAt: now - j.waitedMs,
+        endedAt: null,
+        consumer: j.consumer,
+        path: j.path,
+      });
+    }
+
+    // Anything that has crossed and been seen, or that has been falling for
+    // longer than the field can meaningfully show, is dropped.
+    const display = now - DELAY_MS;
+    for (const [key, n] of [...notes.current]) {
+      const gone = n.endedAt !== null && display > n.endedAt + 600;
+      const ancient = n.endedAt === null && display - n.startedAt > 600_000;
+      if (gone || ancient) {
+        notes.current.delete(key);
+        rects.current.delete(key);
+        crossed.current.delete(key);
+      }
+    }
+    return [...notes.current.entries()];
+  }, [s, feed]);
+
+  /**
+   * Positions are per-note and not linear, so there is no single transform to
+   * move. Attributes are written straight to the elements instead, which keeps
+   * a sixty-times-a-second loop out of React entirely.
    */
   useEffect(() => {
-    const g = scroller.current;
-    // Scrolling is the whole idea, so when motion is unwelcome the field still
-    // shows where everything is, just without moving to get there.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      g?.setAttribute('transform', 'translate(0 0)');
-      return;
-    }
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let raf = 0;
     const step = () => {
-      if (scroller.current) {
-        scroller.current.setAttribute(
-          'transform',
-          `translate(0 ${(Date.now() - tref) * SPEED})`,
-        );
+      const display = Date.now() - DELAY_MS;
+
+      for (const [key, n] of notes.current) {
+        const el = rects.current.get(key);
+        if (!el) continue;
+        const p = progress(n, display);
+        el.setAttribute('y', String(p * (LINE - NOTE_H)));
+        el.setAttribute('opacity', p > 0 ? '1' : '0');
+
+        // The hit is the note arriving, so it fires off the animation rather
+        // than off a message, and lands with the note every time.
+        if (p >= 1 && !crossed.current.has(key)) {
+          crossed.current.add(key);
+          flashUntil.current[n.lane] = Date.now() + 520;
+        }
       }
-      raf = requestAnimationFrame(step);
+
+      flashes.current.forEach((el, lane) => {
+        if (!el) return;
+        const left = (flashUntil.current[lane] ?? 0) - Date.now();
+        el.setAttribute('opacity', left > 0 ? String((left / 520) * 0.95) : '0');
+      });
+
+      if (!reduced) raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [tref]);
-
-  // A note whose time has come but which is still queued rests on the line
-  // instead of falling through it. A lane wearing a stack of them is stuck.
-  const due = placed.filter((n) => n.eta <= tref);
-  const falling = placed.filter((n) => n.eta > tref && n.eta - tref < LOOKAHEAD_MS * 1.4);
-
-  const [hits, setHits] = useState<{ id: number; lane: number }[]>([]);
-  const seen = useRef<number>(0);
-  const nextId = useRef(0);
-
-  useEffect(() => {
-    const newest = feed[0];
-    if (!newest || newest.ts <= seen.current) return;
-
-    // The feed arrives backfilled, so the first batch is history rather than
-    // things happening now. Take note of where it ends and only flash what
-    // arrives after: otherwise the panel opens by firing every row at once.
-    if (seen.current === 0) {
-      seen.current = newest.ts;
-      return;
-    }
-
-    const fresh = feed.filter((r) => r.ts > seen.current);
-    seen.current = newest.ts;
-
-    const added = fresh
-      .map((r) => ({ id: nextId.current++, lane: LANES.indexOf(r.tier) }))
-      .filter((x) => x.lane >= 0);
-    if (!added.length) return;
-
-    setHits((h) => [...h, ...added].slice(-24));
-    const timer = setTimeout(
-      () => setHits((h) => h.filter((x) => !added.some((a) => a.id === x.id))),
-      520,
-    );
-    return () => clearTimeout(timer);
-  }, [feed]);
+  }, []);
 
   const { served, failed, expired } = s.totals;
   const attempted = served + failed + expired;
   const accuracy = attempted ? (served / attempted) * 100 : 100;
 
-  // Consecutive delivered requests, newest first, broken by a refusal or an
-  // error. A break is exactly the moment osu! turned us away.
   let combo = 0;
   for (const r of feed) {
     if (r.limiter || r.status >= 400 || r.status === 0) break;
@@ -189,48 +213,24 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
 
       <svg viewBox={`0 0 ${W} ${H}`} className="pf-svg" role="img"
            aria-label={t.playfield.ariaLabel}>
-        <defs>
-          {/* Notes appear at the top edge rather than popping into being. */}
-          <clipPath id="pf-clip">
-            <rect x={0} y={0} width={W} height={LINE + 2} />
-          </clipPath>
-        </defs>
-
         {LANES.map((tier, i) => (
           <rect key={tier} x={i * LANE_W} y={0} width={LANE_W - 1} height={H}
                 className="pf-lane" />
         ))}
 
-        <g clipPath="url(#pf-clip)">
-          <g ref={scroller}>
-            {falling.map((n) => (
-              <rect
-                key={`${n.lane}-${n.path}-${n.eta}`}
-                x={n.lane * LANE_W + 3}
-                y={LINE - (n.eta - tref) * SPEED - NOTE_H}
-                width={LANE_W - 7}
-                height={NOTE_H}
-                rx={3}
-                fill={LANE_COLOURS[n.lane]}
-                className="pf-note"
-              >
-                <title>{`${n.consumer} · ${n.path}`}</title>
-              </rect>
-            ))}
-          </g>
-
-          {/* Overdue notes are pinned, so they do not scroll away from the line
-              they never got hit on. */}
-          {due.map((n, i) => (
+        <g>
+          {drawn.map(([key, n]) => (
             <rect
-              key={`due-${n.lane}-${n.path}`}
+              key={key}
+              ref={(el) => { rects.current.set(key, el); }}
               x={n.lane * LANE_W + 3}
-              y={LINE - NOTE_H - i * 2}
+              y={-NOTE_H}
               width={LANE_W - 7}
               height={NOTE_H}
               rx={3}
+              opacity={0}
               fill={LANE_COLOURS[n.lane]}
-              className="pf-note pf-due"
+              className="pf-note"
             >
               <title>{`${n.consumer} · ${n.path}`}</title>
             </rect>
@@ -239,14 +239,17 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
 
         <line x1={0} x2={W} y1={LINE} y2={LINE} className="pf-line" />
 
-        {hits.map((h) => (
-          <rect key={h.id} x={h.lane * LANE_W + 1} y={LINE - 5}
+        {LANES.map((tier, i) => (
+          <rect key={`f-${tier}`}
+                ref={(el) => { flashes.current[i] = el; }}
+                x={i * LANE_W + 1} y={LINE - 5}
                 width={LANE_W - 3} height={10} rx={3}
-                fill={LANE_COLOURS[h.lane]} className="pf-hit" />
+                opacity={0}
+                fill={LANE_COLOURS[i]} className="pf-hit" />
         ))}
 
         {LANES.map((tier, i) => (
-          <text key={tier} x={i * LANE_W + LANE_W / 2} y={H - 8}
+          <text key={`k-${tier}`} x={i * LANE_W + LANE_W / 2} y={H - 8}
                 textAnchor="middle" className="pf-key">
             {tier.slice(0, 2).toUpperCase()}
           </text>
