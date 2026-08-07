@@ -10,17 +10,16 @@ services:
       - "127.0.0.1:7654:7654"
     volumes:
       - scheduler-data:/data
+    # The whole .env reaches the container. Listing variables one by one meant
+    # anything not on the list was silently ignored: .env.example documents
+    # about twenty and only five were forwarded, so setting DASHBOARD_AUTH
+    # left the dashboard open and the rate knobs did nothing.
+    env_file:
+      - .env
     environment:
-      # Required: the shared password consumers present to use the scheduler.
+      # Repeated here only to fail fast: starting without a token would expose
+      # the request budget to anyone who can reach the port.
       SCHEDULER_TOKEN: "${SCHEDULER_TOKEN:?set SCHEDULER_TOKEN in .env}"
-      # Dashboard sign-in. Register an osu! OAuth app whose callback is
-      # <DASHBOARD_ORIGIN>/auth/callback.
-      DASHBOARD_ORIGIN: "${DASHBOARD_ORIGIN:-http://localhost:7654}"
-      DASHBOARD_OSU_CLIENT_ID: "${DASHBOARD_OSU_CLIENT_ID:-}"
-      DASHBOARD_OSU_CLIENT_SECRET: "${DASHBOARD_OSU_CLIENT_SECRET:-}"
-      DASHBOARD_ALLOWED_OSU_IDS: "${DASHBOARD_ALLOWED_OSU_IDS:-}"
-      # Rate model. Defaults match osu!'s documented 60/min average, 1200 burst.
-      SCHEDULER_PACE_SECONDS: "${SCHEDULER_PACE_SECONDS:-1.0}"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7654/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
