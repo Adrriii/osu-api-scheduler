@@ -107,21 +107,31 @@ const failed = (r: RequestRow) => !!r.limiter || r.status >= 400 || r.status ===
  * and the streak is counted back from it, so it rises exactly as a note lands.
  *
  * Rows only reach back 150, so a longer streak cannot be counted from them.
- * Where no break is found within that window the server's total is used
- * instead, less whatever has landed since -- which is the same number, arrived
- * at from the other end.
+ * Where no break is found within that window the server's total stands in,
+ * less what has landed since -- but only back to `countedAt`, the moment that
+ * total was taken. Subtracting rows the server had not yet seen made the number
+ * fall by one for every request that arrived between snapshots, which is a
+ * combo going *down* on a hit.
  *
  * Exported so it can be checked without a browser.
  */
-export function comboAt(feed: RequestRow[], at: number, serverCombo: number): number {
+export function comboAt(
+  feed: RequestRow[],
+  at: number,
+  serverCombo: number,
+  countedAt: number,
+): number {
   let streak = 0;
   let sinceField = 0;
   let brokeSinceField = false;
 
   for (const r of feed) {
     if (r.ts > at) {
-      if (failed(r)) brokeSinceField = true;
-      else sinceField++;
+      // Only what the server's own total already accounts for.
+      if (r.ts <= countedAt) {
+        if (failed(r)) brokeSinceField = true;
+        else sinceField++;
+      }
       continue;
     }
     if (failed(r)) return streak;
@@ -178,6 +188,8 @@ export function Playfield({
   /** Read by the frame loop, which must not close over a changing prop. */
   const rows = useRef<RequestRow[]>(feed);
   const serverCombo = useRef(0);
+  /** Server time the count above was taken at. */
+  const comboAsOf = useRef(0);
   const comboText = useRef<SVGTextElement | null>(null);
 
   /**
@@ -231,6 +243,7 @@ export function Playfield({
     const at = fieldNow();
     rows.current = feed;
     serverCombo.current = s.combo ?? 0;
+    comboAsOf.current = Number.isFinite(s.now) ? s.now : Date.now();
 
     for (const j of s.queue ?? []) {
       const lane = LANES.indexOf(j.tier);
@@ -312,7 +325,8 @@ export function Playfield({
       // Written here rather than rendered, so it changes on the frame the note
       // lands rather than whenever React next has a reason to run.
       if (comboText.current) {
-        comboText.current.textContent = `${comboAt(rows.current, at, serverCombo.current)}x`;
+        comboText.current.textContent =
+          `${comboAt(rows.current, at, serverCombo.current, comboAsOf.current)}x`;
       }
 
       flashes.current.forEach((el, lane) => {
