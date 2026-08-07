@@ -221,6 +221,14 @@ export const config = {
   dbPath: str('SCHEDULER_DB_PATH', `${STATE_DIR}/metrics.db`),
 
   /**
+   * What only lives in memory while running -- the live feed, the per-minute
+   * shape of the last few hours, the latency samples, and the token buckets --
+   * written here on the way down and read back on the way up. Without it every
+   * restart resets the buckets to empty and blanks the hour view.
+   */
+  memoryFile: str('SCHEDULER_MEMORY_FILE', `${STATE_DIR}/memory.json`),
+
+  /**
    * Live detail is held in memory and never written per request; only hourly
    * and daily aggregates reach disk. A per-request row costs 111 bytes with its
    * indexes, so 60 req/min for 45 days would be 413 MB. Aggregates are ~70

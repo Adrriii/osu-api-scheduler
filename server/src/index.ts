@@ -6,6 +6,7 @@ import type { JobRequest } from './queue.js';
 import { Scheduler } from './scheduler.js';
 import { mountDashboard } from './dashboard.js';
 import { schedulerTokenValid } from './auth.js';
+import { store } from './store.js';
 
 const scheduler = new Scheduler();
 const app = new Hono();
@@ -203,6 +204,10 @@ if (socketActivated) {
   server.listen({ fd: SD_LISTEN_FD }, () => announce(`systemd socket (fd ${SD_LISTEN_FD})`));
 }
 
+// Cheap enough to do often, and the buckets are what a restart most visibly
+// loses.
+setInterval(() => scheduler.saveState(), 30_000).unref();
+
 async function shutdown(signal: string) {
   const queued = scheduler.queue.size;
   log.info('draining before shutdown', { signal, queued, graceMs: config.shutdownGraceMs });
@@ -210,6 +215,9 @@ async function shutdown(signal: string) {
   // stay up, which is what lets the queued jobs still answer their callers.
   server.close();
   await scheduler.stop(config.shutdownGraceMs);
+  // Last, so what is written is what was true at the end of the drain.
+  scheduler.saveState();
+  store.saveMemory();
   log.info('shutdown complete', { served: queued - scheduler.queue.size });
   process.exit(0);
 }

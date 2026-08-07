@@ -150,9 +150,11 @@ export class PriorityQueue {
    * you are waiting on is next or behind four hundred others.
    */
   peek(limit: number, now = Date.now()): {
+    id: number;
     tier: Tier;
     consumer: string;
     path: string;
+    startedAt: number;
     waitedMs: number;
     position: number;
   }[] {
@@ -163,10 +165,15 @@ export class PriorityQueue {
     // Within a lane order is already FIFO; across lanes, effective priority
     // decides, with the older job first on a tie.
     all.sort((a, b) => a.score - b.score || a.job.enqueuedAt - b.job.enqueuedAt);
+    // id and startedAt travel with the job so a caller can follow one request
+    // from the queue into the record of it finishing. Without them the two
+    // views share no identity and can only be matched by guesswork.
     return all.slice(0, limit).map(({ job }, i) => ({
+      id: job.id,
       tier: job.tier,
       consumer: job.consumer,
       path: job.request.path,
+      startedAt: job.enqueuedAt,
       waitedMs: now - job.enqueuedAt,
       position: i + 1,
     }));

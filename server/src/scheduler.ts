@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { TIERS, config, paceIntervalMs, type Tier } from './config.js';
 import { log } from './log.js';
 import { PriorityQueue, type Job, type JobRequest, type JobResult } from './queue.js';
@@ -81,6 +81,8 @@ export class Scheduler {
     } catch {
       // No mirror file means no known ban.
     }
+
+    this.loadState();
   }
 
   submit(
@@ -111,7 +113,9 @@ export class Scheduler {
     upstreamMs: number,
   ): void {
     const rec: RequestRecord = {
+      id: job.id,
       ts: Date.now(),
+      startedAt: job.enqueuedAt,
       consumer: job.consumer,
       tier: job.tier,
       path: job.request.path,
@@ -501,6 +505,43 @@ export class Scheduler {
    * Pumping continues while draining. Only new arrivals are refused, by the
    * listener closing first.
    */
+  /**
+   * The buckets, written down so a restart does not begin at nothing.
+   *
+   * Starting empty was deliberate -- assuming a full upstream bucket after a
+   * restart is a 1200 request gamble -- but starting at what we last actually
+   * held is not a guess at all. If we were down a while the real bucket has
+   * refilled beyond this, so restoring it errs low, which is the safe side.
+   */
+  saveState(): void {
+    try {
+      const tmp = `${config.memoryFile}.sched.tmp`;
+      writeFileSync(tmp, JSON.stringify({
+        savedAt: Date.now(),
+        tokens: this.tokens,
+        levels: this.levels,
+        combo: this.combo,
+      }));
+      renameSync(tmp, `${config.memoryFile}.sched`);
+    } catch (err) {
+      log.error('could not save scheduler state', { err: String(err) });
+    }
+  }
+
+  private loadState(): void {
+    try {
+      const d = JSON.parse(readFileSync(`${config.memoryFile}.sched`, 'utf8')) as {
+        tokens?: number; levels?: Partial<Record<Tier, number>>; combo?: number;
+      };
+      if (Number.isFinite(d.tokens)) this.tokens = Math.max(0, d.tokens!);
+      if (d.levels) this.levels = d.levels;
+      if (Number.isFinite(d.combo)) this.combo = d.combo!;
+      log.info('restored buckets from disk', { tokens: Math.round(this.tokens) });
+    } catch {
+      // Nothing saved, or unreadable. Starting empty is the old behaviour.
+    }
+  }
+
   async stop(graceMs = 25_000): Promise<void> {
     const deadline = Date.now() + graceMs;
     while (this.queue.size > 0 && Date.now() < deadline) {

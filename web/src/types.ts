@@ -8,6 +8,8 @@ export interface LevelState {
 }
 
 export interface QueuedJob {
+  id: number;
+  startedAt: number;
   position: number;
   tier: string;
   consumer: string;
@@ -35,7 +37,9 @@ export interface Snapshot {
 }
 
 export interface RequestRow {
+  id: number;
   ts: number;
+  startedAt: number;
   consumer: string;
   tier: string;
   path: string;

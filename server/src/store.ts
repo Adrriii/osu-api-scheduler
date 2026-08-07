@@ -1,11 +1,15 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { config } from './config.js';
 import { log } from './log.js';
 
 export interface RequestRecord {
+  /** The job's id, so this can be matched to the queue entry it came from. */
+  id: number;
   ts: number;
+  /** When it was enqueued. `ts` is when it finished. */
+  startedAt: number;
   consumer: string;
   tier: string;
   path: string;
@@ -140,6 +144,7 @@ class Store {
       );
     this.upsert = upsertInto('request_hourly', 'hour');
     this.upsertDay = upsertInto('request_daily', 'day');
+    this.loadMemory();
   }
 
   /** How far back the in-memory minute buckets reach. */
@@ -182,6 +187,66 @@ class Store {
   }
 
   /** Write pending hours to disk. Cheap: a handful of rows. */
+  /**
+   * Hand the in-memory half of the metrics to disk.
+   *
+   * The aggregates were always durable; the live feed, the per-minute shape and
+   * the latency samples were not, so every restart blanked the hour view and
+   * the medians with it. Written whole rather than appended, because it is a
+   * few hundred kilobytes and correctness matters more than the write.
+   */
+  saveMemory(): void {
+    this.flush();
+    try {
+      const payload = JSON.stringify({
+        savedAt: Date.now(),
+        feed: this.feed,
+        minutes: [...this.minutes].map(([m, by]) => [m, [...by]]),
+        samples: [...this.samples],
+      });
+      // Written aside and moved into place, so a kill mid-write cannot leave a
+      // half-file that fails to parse on the way back up.
+      const tmp = `${config.memoryFile}.tmp`;
+      writeFileSync(tmp, payload);
+      renameSync(tmp, config.memoryFile);
+    } catch (err) {
+      log.error('could not save in-memory metrics', { err: String(err) });
+    }
+  }
+
+  private loadMemory(): void {
+    let raw: string;
+    try {
+      raw = readFileSync(config.memoryFile, 'utf8');
+    } catch {
+      return; // First run, or nothing was saved. Not a problem.
+    }
+    try {
+      const d = JSON.parse(raw) as {
+        feed?: RequestRecord[];
+        minutes?: [number, [string, Agg][]][];
+        samples?: [string, { ts: number; waited: number; upstream: number }[]][];
+      };
+      // Anything that has aged out while we were down is dropped on the way in,
+      // rather than briefly reappearing in the window it no longer belongs to.
+      const cutoff = Date.now() - this.memoryHorizonMs;
+      this.feed = (d.feed ?? []).filter((r) => r.ts >= cutoff).slice(0, config.feedSize);
+      for (const [minute, by] of d.minutes ?? []) {
+        if (minute >= cutoff) this.minutes.set(minute, new Map(by));
+      }
+      for (const [key, rows] of d.samples ?? []) {
+        const kept = rows.filter((r) => r.ts >= cutoff);
+        if (kept.length) this.samples.set(key, kept);
+      }
+      log.info('restored in-memory metrics', {
+        feed: this.feed.length,
+        minutes: this.minutes.size,
+      });
+    } catch (err) {
+      log.error('could not read saved metrics, starting empty', { err: String(err) });
+    }
+  }
+
   flush(): void {
     if (!this.pending.size) return;
     try {
@@ -473,4 +538,7 @@ export const store = new Store(config.dbPath);
 store.prune();
 // Flush often enough that a hard kill loses little, cheap enough not to matter.
 setInterval(() => store.flush(), 30_000).unref();
+// A clean shutdown is not the only way this process ends. Checkpointing the
+// in-memory half means a crash costs a couple of minutes of it rather than all.
+setInterval(() => store.saveMemory(), 120_000).unref();
 setInterval(() => store.prune(), HOUR).unref();
