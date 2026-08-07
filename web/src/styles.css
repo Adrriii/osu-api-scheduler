@@ -314,7 +314,9 @@ tbody tr:last-child td { border-bottom: 0; }
 
 /* ---- playfield ----------------------------------------------------------- */
 
-.playfield { overflow: hidden; }
+/* No heading: it is visibly a playfield, and the label was taking room the
+   field could use. The panel is the field, so it keeps no padding either. */
+.playfield { overflow: hidden; padding: 10px; }
 /* osu!'s own two readouts, carrying real numbers: accuracy is the delivered
    share of everything attempted, combo the run of requests since the last
    refusal. A combo break is exactly the moment osu! turned us away.

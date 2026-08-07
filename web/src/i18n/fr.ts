@@ -68,7 +68,6 @@ export const fr: Dict = {
   },
 
   playfield: {
-    heading: 'Terrain de jeu',
     ariaLabel: 'Requêtes en attente sur cinq couloirs de priorité, la plus proche du départ en bas',
   },
 

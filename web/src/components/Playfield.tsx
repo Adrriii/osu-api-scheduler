@@ -333,8 +333,6 @@ export function Playfield({
 
   return (
     <section className="card playfield">
-      <h2>{t.playfield.heading}</h2>
-
       <svg viewBox={`0 0 ${W} ${H}`} className="pf-svg" role="img"
            aria-label={t.playfield.ariaLabel}>
         {LANES.map((tier, i) => (

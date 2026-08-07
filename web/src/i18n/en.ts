@@ -66,7 +66,6 @@ export const en = {
   },
 
   playfield: {
-    heading: 'Playfield',
     ariaLabel: 'Queued requests as five priority lanes, newest at the judgement line',
   },
 
