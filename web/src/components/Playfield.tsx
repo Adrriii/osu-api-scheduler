@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '../i18n/index.js';
 import type { RequestRow, Snapshot } from '../types.js';
 
@@ -99,9 +99,8 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
   const flashUntil = useRef<number[]>(LANES.map(() => 0));
   const flashes = useRef<(SVGRectElement | null)[]>([]);
   const crossed = useRef(new Set<string>());
-  /** Browser clock minus server clock, learned from the feed. */
+  /** Browser clock minus server clock, learned from each snapshot. */
   const skew = useRef<number | null>(null);
-  const newestSeen = useRef(0);
 
   /**
    * Two sources, because neither alone is complete. A finished request carries
@@ -116,15 +115,22 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
     // a few seconds fast prunes every note the moment it arrives, and a slow one
     // never reaches the point where a note starts falling.
     //
-    // A row only says "just now" at the moment it first appears, so that is the
-    // only time it is sampled.
-    const newestTs = feed[0]?.ts ?? 0;
-    if (newestTs > newestSeen.current) {
-      const sample = Date.now() - newestTs;
+    // The snapshot carries the server's clock and arrives live, so the offset
+    // comes from that. Taking it from the newest feed row instead was worse than
+    // useless: on a quiet scheduler the newest request can be minutes old, and
+    // the field then runs minutes in the past, where every note sits at nought
+    // and nothing appears to move at all.
+    // A server older than this field sends no clock. Assuming the browser's is
+    // right is the correct fallback -- usually true, and wrong by seconds at
+    // worst -- whereas arithmetic on a missing value yields NaN for every
+    // position, which stops the field dead and looks like nothing is running.
+    if (Number.isFinite(s.now)) {
+      const sample = Date.now() - s.now;
       skew.current = skew.current === null ? sample : skew.current + (sample - skew.current) * 0.2;
-      newestSeen.current = newestTs;
+    } else if (skew.current === null) {
+      skew.current = 0;
     }
-    const now = Date.now() - (skew.current ?? 0);
+    const now = Date.now() - skew.current;
 
     // Keyed by the event, not by what was requested: the same consumer asking
     // for the same path again is a second note, not the first one over again.
@@ -183,38 +189,50 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
    * move. Attributes are written straight to the elements instead, which keeps
    * a sixty-times-a-second loop out of React entirely.
    */
+  const paint = useCallback(() => {
+    const display = Date.now() - (skew.current ?? 0) - DELAY_MS;
+
+    for (const [key, n] of notes.current) {
+      const el = rects.current.get(key);
+      if (!el) continue;
+      const p = progress(n, display);
+      el.setAttribute('y', String(p * (LINE - NOTE_H)));
+      el.setAttribute('opacity', p > 0 ? '1' : '0');
+
+      // The hit is the note arriving, so it fires off the animation rather
+      // than off a message, and lands with the note every time.
+      if (p >= 1 && !crossed.current.has(key)) {
+        crossed.current.add(key);
+        flashUntil.current[n.lane] = Date.now() + 520;
+      }
+    }
+
+    flashes.current.forEach((el, lane) => {
+      if (!el) return;
+      const left = (flashUntil.current[lane] ?? 0) - Date.now();
+      el.setAttribute('opacity', left > 0 ? String((left / 520) * 0.95) : '0');
+    });
+  }, []);
+
+  // Runs regardless of prefers-reduced-motion. Falling *is* the content here,
+  // not decoration on top of it, and someone who turns that setting on to calm
+  // interfaces down has not asked for a panel that shows nothing. Stopping the
+  // loop after one frame is what left the notes frozen where they mounted.
   useEffect(() => {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let raf = 0;
     const step = () => {
-      const display = Date.now() - (skew.current ?? 0) - DELAY_MS;
-
-      for (const [key, n] of notes.current) {
-        const el = rects.current.get(key);
-        if (!el) continue;
-        const p = progress(n, display);
-        el.setAttribute('y', String(p * (LINE - NOTE_H)));
-        el.setAttribute('opacity', p > 0 ? '1' : '0');
-
-        // The hit is the note arriving, so it fires off the animation rather
-        // than off a message, and lands with the note every time.
-        if (p >= 1 && !crossed.current.has(key)) {
-          crossed.current.add(key);
-          flashUntil.current[n.lane] = Date.now() + 520;
-        }
-      }
-
-      flashes.current.forEach((el, lane) => {
-        if (!el) return;
-        const left = (flashUntil.current[lane] ?? 0) - Date.now();
-        el.setAttribute('opacity', left > 0 ? String((left / 520) * 0.95) : '0');
-      });
-
-      if (!reduced) raf = requestAnimationFrame(step);
+      paint();
+      raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [paint]);
+
+  // New notes have no position until something paints them, and under reduced
+  // motion nothing else will.
+  useEffect(() => {
+    paint();
+  }, [drawn, paint]);
 
   const { served, failed, expired } = s.totals;
   const attempted = served + failed + expired;

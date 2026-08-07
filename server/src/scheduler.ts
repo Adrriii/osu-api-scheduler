@@ -428,6 +428,10 @@ export class Scheduler {
     }
     this.refill();
     return {
+      // The dashboard animates against these timings, and a browser clock can
+      // be seconds off ours. Sending our own now lets it correct for that
+      // rather than mixing the two.
+      now: Date.now(),
       sustainedPerMin: Math.round(60_000 / paceIntervalMs()),
       burst: {
         tokens: Math.floor(this.tokens),

@@ -334,21 +334,9 @@ tbody tr:last-child td { border-bottom: 0; }
    rather than animated away. */
 .pf-due { opacity: 0.75; stroke: rgba(255, 255, 255, 0.45); }
 
-.pf-hit {
-  animation: pf-hit 520ms ease-out forwards;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-@keyframes pf-hit {
-  0% { opacity: 0.95; transform: scaleY(1.6); }
-  100% { opacity: 0; transform: scaleY(0.4); }
-}
-/* A dispatch is a real event, but a flashing panel is not worth a headache. */
-@media (prefers-reduced-motion: reduce) {
-  .pf-note { transition: none; }
-  .pf-hit { animation: none; opacity: 0.6; }
-}
-
+/* Opacity is driven from the loop along with everything else, so the hit fades
+   with the same clock the notes fall on. */
+.pf-hit { transform-box: fill-box; transform-origin: center; }
 .foot {
   display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
   margin: 28px 0 8px; padding-top: 16px;
