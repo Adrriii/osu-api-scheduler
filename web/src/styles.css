@@ -62,11 +62,10 @@ body {
 }
 .cell { min-width: 0; }
 .cell > .card, .cell > section { margin-bottom: 0; height: 100%; }
-/* A card that has been stretched to match its neighbour hands the extra height
-   to its scroller, so the queue and the feed show more rows rather than leaving
-   a gap under six. The six-row floor still holds when there is nothing spare. */
+/* The scrollers keep their five rows and scroll. Letting them grow into a
+   stretched card made the two live tables the biggest things on the page, which
+   is backwards: they are for glancing at, not for reading through. */
 .cell > .card { display: flex; flex-direction: column; }
-.cell > .card > .feed { flex: 1 1 auto; height: auto; min-height: calc(6 * var(--row)); }
 .s12 { grid-column: span 12; }
 .s8 { grid-column: span 8; }
 .s6 { grid-column: span 6; }
