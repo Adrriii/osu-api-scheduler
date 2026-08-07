@@ -178,6 +178,24 @@ Same command whether the scheduler runs in Docker or on the host: both listen on
 `/api/*` is safe to expose, it needs `SCHEDULER_TOKEN`. The templates in
 `deploy/` have a commented-out block if you would rather keep it private anyway.
 
+## Settings
+
+Everything is optional except `SCHEDULER_TOKEN`. Defaults match what osu!
+documents: 60 requests per minute, bursts to 1200.
+
+| Variable | Default | |
+|---|---|---|
+| `SCHEDULER_TOKEN` | none | Required. Password your projects present |
+| `SCHEDULER_PACE_SECONDS` | `1.0` | Seconds between requests. `1.0` is 60/min |
+| `SCHEDULER_PORT` | `7654` | |
+| `SCHEDULER_SHARE_*` | see `.env.example` | Each priority's slice of the rate |
+| `SCHEDULER_BURST_*` | see `.env.example` | Each priority's spare capacity for a rush |
+| `SCHEDULER_HOURLY_RETENTION_DAYS` | `90` | How long hour-by-hour detail is kept |
+| `SCHEDULER_RETENTION_DAYS` | `3650` | How long daily usage totals are kept |
+
+To change the rate while it runs, write the new value to
+`$SCHEDULER_STATE_DIR/pace_interval`. It is read every second, no restart.
+
 ## Update
 
 ```bash
@@ -224,25 +242,7 @@ The dashboard footer needs nothing further: the server reads the root
 `package.json` at runtime, so the footer shows the new version once the service
 restarts.
 
-## Settings
-
-Everything is optional except `SCHEDULER_TOKEN`. Defaults match what osu!
-documents: 60 requests per minute, bursts to 1200.
-
-| Variable | Default | |
-|---|---|---|
-| `SCHEDULER_TOKEN` | none | Required. Password your projects present |
-| `SCHEDULER_PACE_SECONDS` | `1.0` | Seconds between requests. `1.0` is 60/min |
-| `SCHEDULER_PORT` | `7654` | |
-| `SCHEDULER_SHARE_*` | see `.env.example` | Each priority's slice of the rate |
-| `SCHEDULER_BURST_*` | see `.env.example` | Each priority's spare capacity for a rush |
-| `SCHEDULER_HOURLY_RETENTION_DAYS` | `90` | How long hour-by-hour detail is kept |
-| `SCHEDULER_RETENTION_DAYS` | `3650` | How long daily usage totals are kept |
-
-To change the rate while it runs, write the new value to
-`$SCHEDULER_STATE_DIR/pace_interval`. It is read every second, no restart.
-
-### Disk use
+### Disk usage
 
 Individual requests are never written to disk. The live feed, the last few
 hours minute by minute, and the latency medians are all in memory. What is

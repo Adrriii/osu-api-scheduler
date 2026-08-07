@@ -35,6 +35,10 @@ say()  { printf '==> %s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
 die()  { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+# `set -e` otherwise ends the run with no output at all, which is indisting-
+# uishable from having finished successfully. Say where it stopped.
+trap 'rc=$?; (( rc )) && printf "error: update stopped at line %d (exit %d)\n" "$LINENO" "$rc" >&2' ERR
+
 cd "$SRC"
 
 # ---- where is it running? --------------------------------------------------
@@ -62,7 +66,14 @@ fi
 say "deployment: $MODE${PREFIX:+ ($PREFIX)}"
 
 # The port to health-check. Whatever configured it wins; 7654 is the default.
-port_from() { [[ -f $1 ]] && sed -n 's/^[[:space:]]*SCHEDULER_PORT=\(.*\)$/\1/p' "$1" | tail -1; }
+#
+# Returns 0 with no output when the file is absent, which is the normal case
+# under Docker. Letting the missing-file test be the function's exit status made
+# `set -e` kill the script inside the assignment below, with nothing printed.
+port_from() {
+  [[ -f $1 ]] || return 0
+  sed -n 's/^[[:space:]]*SCHEDULER_PORT=\(.*\)$/\1/p' "$1" | tail -1
+}
 PORT="${SCHEDULER_PORT:-$(port_from "$CONF/scheduler.env")}"
 [[ -n ${PORT:-} ]] || PORT="$(port_from "$SRC/.env")"
 PORT="${PORT:-7654}"
