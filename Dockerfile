@@ -18,10 +18,9 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY web/package.json web/
 COPY server/package.json server/
-# tsx is needed at runtime: the server is run from TypeScript source rather
-# than a build step, which keeps the image honest about what it is running.
+# tsx is a runtime dependency, not a dev one: the server is run from TypeScript
+# source rather than a build step, so --omit=dev must not strip it.
 RUN npm ci --omit=dev --workspace server --include-workspace-root \
- && npm i -w server tsx@^4.19.0 \
  && npm cache clean --force
 
 COPY server/ server/
