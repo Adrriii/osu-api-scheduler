@@ -67,28 +67,29 @@ body {
    is backwards: they are for glancing at, not for reading through. */
 .cell > .card { display: flex; flex-direction: column; }
 .s12 { grid-column: span 12; }
-.s10 { grid-column: span 10; }
-.s8 { grid-column: span 8; }
+.s9 { grid-column: span 9; }
 .s6 { grid-column: span 6; }
+.s5 { grid-column: span 5; }
 .s4 { grid-column: span 4; }
-.s2 { grid-column: span 2; }
+.s3 { grid-column: span 3; }
 .rspan2 { grid-row: span 2; }
 
 /* Breakpoints are set by what each panel needs, not by device names. The chart
    and the levels table are the widest things here, so they give up their
    neighbours first. */
-@media (max-width: 1400px) {
-  .s10 { grid-column: span 9; }
-  .s8 { grid-column: span 12; }
-  .s6 { grid-column: span 6; }
-  .s4 { grid-column: span 12; }
-  /* The playfield keeps its place beside the headline rather than dropping
-     below it: being tall and to one side is the whole point of it. */
-  .s2 { grid-column: span 3; }
+@media (max-width: 1500px) {
+  /* The queue and the feed have the most columns for their width, so they are
+     the first to want a whole row between them. */
+  .s6 { grid-column: span 8; }
+  .s3 { grid-column: span 4; }
+  .s5 { grid-column: span 5; }
+  .s9 { grid-column: span 8; }
 }
-@media (max-width: 1080px) {
-  .s10, .s6 { grid-column: span 12; }
-  .s2 { grid-column: span 4; }
+@media (max-width: 1180px) {
+  .s5, .s4, .s6, .s9 { grid-column: span 12; }
+  /* Still beside something rather than below everything: being tall and to one
+     side is the whole point of it. */
+  .s3 { grid-column: span 6; }
   .rspan2 { grid-row: span 1; }
 }
 
@@ -306,9 +307,10 @@ tbody tr:last-child td { border-bottom: 0; }
 
 /* ---- playfield ----------------------------------------------------------- */
 
-/* No heading: it is visibly a playfield, and the label was taking room the
-   field could use. The panel is the field, so it keeps no padding either. */
-.playfield { overflow: hidden; padding: 10px; }
+/* No heading, and no padding: the panel *is* the field, edge to edge. Its
+   height comes from the space it is given rather than from its own width, so it
+   fills whatever slot it sits in instead of forcing its neighbours to match. */
+.playfield { overflow: hidden; padding: 0; }
 /* osu!'s own two readouts, carrying real numbers: accuracy is the delivered
    share of everything attempted, combo the run of requests since the last
    refusal. A combo break is exactly the moment osu! turned us away.
@@ -321,7 +323,7 @@ tbody tr:last-child td { border-bottom: 0; }
   letter-spacing: -0.03em; pointer-events: none;
 }
 
-.pf-svg { width: 100%; height: auto; display: block; flex: 1; min-height: 0; }
+.pf-svg { width: 100%; height: 100%; display: block; }
 .pf-lane { fill: rgba(0, 0, 0, 0.28); }
 .pf-line { stroke: rgba(255, 255, 255, 0.35); stroke-width: 2; }
 /* Full level names: two letters left 'in' and 'no' telling nobody anything. */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../i18n/index.js';
 import { seriesColors } from '../theme.js';
 import type { RequestRow, Snapshot, Summary } from '../types.js';
@@ -28,11 +28,16 @@ import type { RequestRow, Snapshot, Summary } from '../types.js';
  * request did. Both facts are the point.
  */
 
+/**
+ * The field's own units. Width is fixed and height follows the space it is
+ * given, so it fills its panel exactly instead of setting its own height from
+ * its width and forcing everything beside it to match.
+ */
 const W = 220;
-const H = 327;
 const LANES = ['realtime', 'interactive', 'high', 'normal', 'bulk'];
 const LANE_W = W / LANES.length;
-const LINE = 270;
+/** Room under the line for the lane names. */
+const FOOT = 40;
 const NOTE_H = 12;
 
 /** How far behind real time the field is drawn. Everything rests on this. */
@@ -203,6 +208,26 @@ export function Playfield({
    * closest to the truth.
    */
   const skew = useRef<number | null>(null);
+
+  // Height in the field's units, taken from the shape of the panel it is in.
+  const box = useRef<HTMLDivElement | null>(null);
+  const [vh, setVh] = useState(327);
+  const line = Math.max(80, vh - FOOT);
+  const lineRef = useRef(line);
+  lineRef.current = line;
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      const { width, height } = el.getBoundingClientRect();
+      if (width > 0 && height > 0) setVh(Math.round((W * height) / width));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   /** The field's own clock, and the wall time it was last advanced at. */
   const clock = useRef(0);
   const lastWall = useRef(0);
@@ -309,7 +334,7 @@ export function Playfield({
         if (!el) continue;
 
         const p = progress(n, at);
-        el.setAttribute('y', String(-RUNWAY + p * (LINE - NOTE_H + RUNWAY)));
+        el.setAttribute('y', String(-RUNWAY + p * (lineRef.current - NOTE_H + RUNWAY)));
 
         // Consumed by the line it lands on, over the same moment its lane
         // lights up, so the two read as one event.
@@ -346,17 +371,18 @@ export function Playfield({
   const accuracy = attempted ? (served / attempted) * 100 : 100;
 
   return (
-    <section className="card playfield">
-      <svg viewBox={`0 0 ${W} ${H}`} className="pf-svg" role="img"
+    <section className="card playfield" ref={box}>
+      <svg viewBox={`0 0 ${W} ${vh}`} preserveAspectRatio="none"
+           className="pf-svg" role="img"
            aria-label={t.playfield.ariaLabel}>
         {LANES.map((tier, i) => (
-          <rect key={tier} x={i * LANE_W} y={0} width={LANE_W - 1} height={H}
+          <rect key={tier} x={i * LANE_W} y={0} width={LANE_W - 1} height={vh}
                 className="pf-lane" />
         ))}
 
         <defs>
           <clipPath id="pf-clip">
-            <rect x={0} y={0} width={W} height={LINE} />
+            <rect x={0} y={0} width={W} height={line} />
           </clipPath>
           {/* Light off the line, brightest where the note met it. Not a colour:
               every lane lights the same way, so the flash says a request went
@@ -389,7 +415,7 @@ export function Playfield({
           })}
         </g>
 
-        <text ref={comboText} x={W / 2} y={LINE * 0.56} textAnchor="middle"
+        <text ref={comboText} x={W / 2} y={line * 0.56} textAnchor="middle"
               className="pf-combo">
           0x
         </text>
@@ -397,18 +423,18 @@ export function Playfield({
           {accuracy.toFixed(2)}%
         </text>
 
-        <line x1={0} x2={W} y1={LINE} y2={LINE} className="pf-line" />
+        <line x1={0} x2={W} y1={line} y2={line} className="pf-line" />
 
         {LANES.map((tier, i) => (
           <rect key={`f-${tier}`}
                 ref={(el) => { flashes.current[i] = el; }}
-                x={i * LANE_W} y={LINE - 34}
+                x={i * LANE_W} y={line - 34}
                 width={LANE_W - 1} height={34}
                 opacity={0} fill="url(#pf-light)" className="pf-hit" />
         ))}
 
         {LANES.map((tier, i) => (
-          <text key={`k-${tier}`} x={i * LANE_W + LANE_W / 2} y={H - 8}
+          <text key={`k-${tier}`} x={i * LANE_W + LANE_W / 2} y={vh - 8}
                 textAnchor="middle" className="pf-key">
             {tier}
           </text>
