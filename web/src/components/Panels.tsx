@@ -104,7 +104,7 @@ function Meter({ value, max, label }: { value: number; max: number; label: strin
   );
 }
 
-export function Status({ s }: { s: Snapshot }) {
+export function Status({ s, data }: { s: Snapshot; data: Summary | null }) {
   const { t } = useI18n();
   const o = overall(s, t);
   const b = s.burst;
@@ -148,35 +148,25 @@ export function Status({ s }: { s: Snapshot }) {
           token: s.limited['osuweb'] ?? 0,
         })}
       </p>
-    </section>
-  );
-}
 
-/**
- * Three windows of the same measure. They used to carry a different secondary
- * each -- refused, then average wait, then errors -- which made them look
- * comparable while measuring different things.
- */
-export function Tiles({ data }: { data: Summary }) {
-  const { t } = useI18n();
-  const w = data.windows;
-  const cards: [string, number, number][] = [
-    [t.tiles.lastHour, w.hour.requests, w.hour.refused],
-    [t.tiles.last24h, w.day.requests, w.day.refused],
-    [t.tiles.last30d, w.month.requests, w.month.refused],
-  ];
-  return (
-    <div className="tiles">
-      {cards.map(([k, requests, refused]) => (
-        <div className="tile" key={k}>
-          <div className="k">{k}</div>
-          <div className="v tabular">{fmt(requests)}</div>
-          <div className={`m${refused ? ' warning' : ''}`}>
-            {refused ? fill(t.tiles.refused, { n: refused }) : t.tiles.noneRefused}
-          </div>
+      {data && (
+        <div className="windows">
+          {([
+            [t.tiles.lastHour, data.windows.hour],
+            [t.tiles.last24h, data.windows.day],
+            [t.tiles.last30d, data.windows.month],
+          ] as const).map(([label, w]) => (
+            <div className="window" key={label}>
+              <span className="k">{label}</span>
+              <span className="v tabular">{fmt(w.requests)}</span>
+              <span className={`m${w.refused ? ' warning' : ''}`}>
+                {w.refused ? fill(t.tiles.refused, { n: w.refused }) : t.tiles.noneRefused}
+              </span>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      )}
+    </section>
   );
 }
 

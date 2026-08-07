@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useDashboard } from './api.js';
 import { LOCALES, useI18n, type Locale } from './i18n/index.js';
 import { UsageChart } from './components/UsageChart.js';
-import { Consumers, Feed, Levels, QueuePanel, Status, Tiles } from './components/Panels.js';
+import { Consumers, Feed, Levels, QueuePanel, Status } from './components/Panels.js';
 import { Footer } from './components/Footer.js';
 import { Playfield } from './components/Playfield.js';
 
@@ -52,15 +52,19 @@ export function App() {
         read together, one being what is waiting and the other what just went.
       */}
       <div className="dash">
-        <div className="cell s6">{snapshot && <Status s={snapshot} />}</div>
-        <div className="cell s3">{summary && <Tiles data={summary} />}</div>
-        {/* Spans the two top rows: it is a tall thing by nature, and the height
-            is what makes a lane's backlog legible. */}
-        <div className="cell s3 rspan2">{snapshot && <Playfield s={snapshot} feed={feed} byConsumer={summary?.byConsumer ?? []} />}</div>
+        <div className="cell s10">{snapshot && <Status s={snapshot} data={summary} />}</div>
+        {/* Narrow, and spanning the two rows beside it. At this width its own
+            proportions come out about as tall as the headline and the table
+            stacked, so neither side is padded out to match the other. */}
+        <div className="cell s2 rspan2">
+          {snapshot && (
+            <Playfield s={snapshot} feed={feed} byConsumer={summary?.byConsumer ?? []} />
+          )}
+        </div>
 
         {/* Full width: comparing five levels across six measures is what an
             aligned table is for, and it needs the room to stay aligned. */}
-        <div className="cell s9">
+        <div className="cell s10">
           {snapshot && summary && <Levels s={snapshot} latency={summary.latency} />}
         </div>
 
