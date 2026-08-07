@@ -99,6 +99,9 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
   const flashUntil = useRef<number[]>(LANES.map(() => 0));
   const flashes = useRef<(SVGRectElement | null)[]>([]);
   const crossed = useRef(new Set<string>());
+  /** Browser clock minus server clock, learned from the feed. */
+  const skew = useRef<number | null>(null);
+  const newestSeen = useRef(0);
 
   /**
    * Two sources, because neither alone is complete. A finished request carries
@@ -108,13 +111,35 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
    * for one.
    */
   const drawn = useMemo(() => {
-    const now = Date.now();
+    // Timestamps in the feed come off the server's clock and the browser has
+    // its own. Comparing the two directly is what emptied the field: a browser
+    // a few seconds fast prunes every note the moment it arrives, and a slow one
+    // never reaches the point where a note starts falling.
+    //
+    // A row only says "just now" at the moment it first appears, so that is the
+    // only time it is sampled.
+    const newestTs = feed[0]?.ts ?? 0;
+    if (newestTs > newestSeen.current) {
+      const sample = Date.now() - newestTs;
+      skew.current = skew.current === null ? sample : skew.current + (sample - skew.current) * 0.2;
+      newestSeen.current = newestTs;
+    }
+    const now = Date.now() - (skew.current ?? 0);
+
+    // Keyed by the event, not by what was requested: the same consumer asking
+    // for the same path again is a second note, not the first one over again.
     for (const r of feed) {
-      const key = idOf(r);
-      const existing = notes.current.get(key);
-      if (existing && existing.endedAt !== null) continue;
+      const key = `f|${r.ts}|${idOf(r)}`;
+      if (notes.current.has(key)) continue;
       const lane = LANES.indexOf(r.tier);
       if (lane < 0) continue;
+
+      // It finished, so whatever was standing in for it while it waited is done.
+      const pending = `q|${idOf(r)}`;
+      notes.current.delete(pending);
+      rects.current.delete(pending);
+      crossed.current.delete(pending);
+
       notes.current.set(key, {
         lane,
         startedAt: r.ts - r.waitedMs,
@@ -125,7 +150,7 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
     }
 
     for (const j of s.queue ?? []) {
-      const key = idOf(j);
+      const key = `q|${idOf(j)}`;
       if (notes.current.has(key)) continue;
       const lane = LANES.indexOf(j.tier);
       if (lane < 0) continue;
@@ -162,7 +187,7 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let raf = 0;
     const step = () => {
-      const display = Date.now() - DELAY_MS;
+      const display = Date.now() - (skew.current ?? 0) - DELAY_MS;
 
       for (const [key, n] of notes.current) {
         const el = rects.current.get(key);
