@@ -1,6 +1,6 @@
 {
   "name": "osu-api-scheduler",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": false,
   "type": "module",
   "license": "AGPL-3.0-or-later",
@@ -21,6 +21,7 @@
     "dev:web": "npm run dev --workspace web",
     "build": "npm run build --workspace web",
     "update": "bash deploy/update.sh",
+    "bump": "node scripts/bump.mjs",
     "start": "npm run start --workspace server",
     "typecheck": "npm run typecheck --workspace server && npm run typecheck --workspace web"
   }

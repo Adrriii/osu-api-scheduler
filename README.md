@@ -211,6 +211,19 @@ latency, not errors.
 The socket is installed and enabled by `deploy/install.sh`. Under Docker there
 is no equivalent, so a restart there is a real gap of a few seconds.
 
+### Releasing
+
+```bash
+npm run bump             # asks which part to raise
+npm run bump -- minor    # or say it outright
+npm run bump -- 2.0.0    # or set it exactly
+```
+
+Writes the version to the root, `server` and `web` manifests and the lockfile.
+The dashboard footer needs nothing further: the server reads the root
+`package.json` at runtime, so the footer shows the new version once the service
+restarts.
+
 ## Settings
 
 Everything is optional except `SCHEDULER_TOKEN`. Defaults match what osu!
