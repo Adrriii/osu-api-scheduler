@@ -315,17 +315,23 @@ tbody tr:last-child td { border-bottom: 0; }
 /* ---- playfield ----------------------------------------------------------- */
 
 .playfield { overflow: hidden; }
-.pf-hud { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
 /* osu!'s own two readouts, carrying real numbers: accuracy is the delivered
    share of everything attempted, combo the run of requests since the last
-   refusal. A combo break is exactly the moment osu! turned us away. */
-.pf-acc { font-size: 15px; font-weight: 800; color: var(--text-secondary); }
-.pf-combo { font-size: 19px; font-weight: 800; color: var(--pink); }
+   refusal. A combo break is exactly the moment osu! turned us away.
+   Drawn on the field rather than above it, so the panel is the playfield and
+   nothing else. Combo sits under the notes it is counting, dim enough to read
+   past. */
+.pf-acc { font-size: 11px; font-weight: 800; fill: var(--text-secondary); }
+.pf-combo {
+  font-size: 46px; font-weight: 800; fill: #fff; opacity: 0.13;
+  letter-spacing: -0.03em; pointer-events: none;
+}
 
 .pf-svg { width: 100%; height: auto; display: block; flex: 1; min-height: 0; }
 .pf-lane { fill: rgba(0, 0, 0, 0.28); }
 .pf-line { stroke: rgba(255, 255, 255, 0.35); stroke-width: 2; }
-.pf-key { font-size: 9px; fill: var(--muted); font-weight: 700; letter-spacing: 0.08em; }
+/* Full level names: two letters left 'in' and 'no' telling nobody anything. */
+.pf-key { font-size: 6px; fill: var(--muted); font-weight: 700; letter-spacing: 0.02em; }
 
 /* Notes are scrolled by a transform on the whole field, so they carry no
    transition of their own: their y is where their arrival time puts them. */

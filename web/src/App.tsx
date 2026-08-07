@@ -56,7 +56,7 @@ export function App() {
         <div className="cell s3">{summary && <Tiles data={summary} />}</div>
         {/* Spans the two top rows: it is a tall thing by nature, and the height
             is what makes a lane's backlog legible. */}
-        <div className="cell s3 rspan2">{snapshot && <Playfield s={snapshot} feed={feed} />}</div>
+        <div className="cell s3 rspan2">{snapshot && <Playfield s={snapshot} feed={feed} byConsumer={summary?.byConsumer ?? []} />}</div>
 
         {/* Full width: comparing five levels across six measures is what an
             aligned table is for, and it needs the room to stay aligned. */}

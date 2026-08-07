@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useI18n } from '../i18n/index.js';
-import type { RequestRow, Snapshot } from '../types.js';
+import { seriesColors } from '../theme.js';
+import type { RequestRow, Snapshot, Summary } from '../types.js';
 
 /**
  * Five priority levels, five lanes. The scheduler happens to have the shape of
@@ -50,7 +51,10 @@ const RUNWAY = 46;
 const HOLD = 0.88;
 const SETTLE_MS = 5000;
 
+/** Lanes stay a fixed ramp by priority; only the notes carry consumer colour. */
 const LANE_COLOURS = ['#ff66ab', '#e35ba8', '#c25aa6', '#9d5cad', '#7c5cd6'];
+/** Anyone outside the ranked consumers, who has no colour of their own. */
+const UNRANKED = '#4a4655';
 
 const idOf = (r: { tier: string; consumer: string; path: string }) =>
   `${r.tier}|${r.consumer}|${r.path}`;
@@ -61,6 +65,15 @@ export type Note = {
   endedAt: number | null;
   consumer: string;
   path: string;
+  /**
+   * Highest position drawn so far. A note is never allowed back up the field,
+   * whatever the arithmetic says: the clock can be revised, a start can be
+   * re-derived when the request finishes, and neither is a reason for a note to
+   * climb. Carried across when a waiting note becomes a finished one.
+   */
+  seen: number;
+  /** Field time it first existed, so one that arrives mid-fall fades in. */
+  bornAt: number;
 };
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -117,16 +130,38 @@ export function progress(n: Note, displayNow: number): number {
   return held + (1 - held) * (k * k * (3 - 2 * k));
 }
 
-export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
+export function Playfield({
+  s,
+  feed,
+  byConsumer,
+}: {
+  s: Snapshot;
+  feed: RequestRow[];
+  byConsumer: Summary['byConsumer'];
+}) {
   const { t } = useI18n();
+
+  // Colour follows the consumer, and it is the same colour the chart and the
+  // table give them, so a lane full of one hue is a project you can name
+  // without looking anything up. The tier is already said by which lane it is
+  // in; coloured by tier as well, the two said the same thing twice.
+  const colourOf = useMemo(() => {
+    const cols = seriesColors();
+    return new Map(byConsumer.slice(0, cols.length).map((r, i) => [r.consumer, cols[i]!]));
+  }, [byConsumer]);
+  const colour = (c: string) => colourOf.get(c) ?? UNRANKED;
 
   const notes = useRef(new Map<string, Note>());
   const rects = useRef(new Map<string, SVGRectElement | null>());
   const flashUntil = useRef<number[]>(LANES.map(() => 0));
+  const flashColour = useRef<string[]>(LANES.map(() => UNRANKED));
   /** The field's own clock, which only ever moves forward. */
   const lastDisplay = useRef(0);
   const flashes = useRef<(SVGRectElement | null)[]>([]);
   const crossed = useRef(new Set<string>());
+  /** Rows already drawn and finished with. The feed keeps 150 of them long
+      after the field is done, and re-adding one puts a note back on the page. */
+  const done = useRef(new Set<string>());
   /** Browser clock minus server clock, learned from each snapshot. */
   const skew = useRef<number | null>(null);
 
@@ -167,22 +202,30 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
     // for the same path again is a second note, not the first one over again.
     for (const r of feed) {
       const key = `f|${r.ts}|${idOf(r)}`;
-      if (notes.current.has(key)) continue;
+      if (notes.current.has(key) || done.current.has(key)) continue;
       const lane = LANES.indexOf(r.tier);
       if (lane < 0) continue;
 
-      // It finished, so whatever was standing in for it while it waited is done.
+      // Whatever stood in for this request while it waited becomes it, rather
+      // than being swapped for a fresh note. The two derive their start from
+      // different clocks -- one from the queue as we polled it, one from the
+      // record afterwards -- so replacing one with the other moved the note,
+      // usually upward. Keeping the original start and how far it had already
+      // fallen makes finishing invisible, which is what it should be.
       const pending = `q|${idOf(r)}`;
+      const prior = notes.current.get(pending);
       notes.current.delete(pending);
       rects.current.delete(pending);
       crossed.current.delete(pending);
 
       notes.current.set(key, {
         lane,
-        startedAt: r.ts - r.waitedMs,
+        startedAt: prior?.startedAt ?? r.ts - r.waitedMs,
         endedAt: r.ts,
         consumer: r.consumer,
         path: r.path,
+        seen: prior?.seen ?? 0,
+        bornAt: prior?.bornAt ?? now,
       });
     }
 
@@ -197,6 +240,8 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
         endedAt: null,
         consumer: j.consumer,
         path: j.path,
+        seen: 0,
+        bornAt: now,
       });
     }
 
@@ -210,6 +255,15 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
         notes.current.delete(key);
         rects.current.delete(key);
         crossed.current.delete(key);
+        done.current.add(key);
+      }
+    }
+
+    // Only needs to outlast the feed's own window, and a dashboard left open
+    // all day would otherwise accumulate one string per request forever.
+    if (done.current.size > 600) {
+      for (const k of [...done.current].slice(0, done.current.size - 300)) {
+        done.current.delete(k);
       }
     }
     return [...notes.current.entries()];
@@ -231,7 +285,12 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
     for (const [key, n] of notes.current) {
       const el = rects.current.get(key);
       if (!el) continue;
-      const p = progress(n, display);
+      // Only ever forward. Every remaining way a note could climb -- the clock
+      // being revised, a start re-derived on completion, a poll arriving out of
+      // order -- ends here rather than being chased individually.
+      const p = Math.max(progress(n, display), n.seen);
+      n.seen = p;
+
       // p is time, not height: 0 is the request starting and 1 is it landing on
       // the line. The runway is added to the height only, so where a note is at
       // any moment still means exactly what it did.
@@ -242,21 +301,25 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
       // the lane lights up, so the two read as one event.
       const past = n.endedAt !== null ? display - n.endedAt : -1;
       const fading = past >= 0 ? Math.max(0, 1 - past / HIT_MS) : 1;
-      // Geometry hides a note that has not started yet -- it sits above the
-      // field -- so opacity is only ever about being consumed by the line.
-      el.setAttribute('opacity', String(fading));
+      // A request already part-way through when we first hear of it belongs
+      // mid-field, and arriving there abruptly reads as a glitch. It fades in
+      // over the same moment instead.
+      const arriving = Math.min(1, (display - n.bornAt) / HIT_MS);
+      el.setAttribute('opacity', String(Math.min(fading, arriving)));
 
       // The hit is the note arriving, so it fires off the animation rather
       // than off a message, and lands with the note every time.
       if (p >= 1 && !crossed.current.has(key)) {
         crossed.current.add(key);
         flashUntil.current[n.lane] = Date.now() + HIT_MS;
+        flashColour.current[n.lane] = colour(n.consumer);
       }
     }
 
     flashes.current.forEach((el, lane) => {
       if (!el) return;
       const left = (flashUntil.current[lane] ?? 0) - Date.now();
+      el.setAttribute('fill', flashColour.current[lane] ?? UNRANKED);
       el.setAttribute('opacity', left > 0 ? String((left / HIT_MS) * 0.95) : '0');
     });
   }, []);
@@ -295,12 +358,6 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
     <section className="card playfield">
       <h2>{t.playfield.heading}</h2>
 
-      <div className="pf-hud">
-        <span className="pf-acc tabular">{accuracy.toFixed(2)}%</span>
-        <span className="spacer" />
-        <span className="pf-combo tabular">{combo}x</span>
-      </div>
-
       <svg viewBox={`0 0 ${W} ${H}`} className="pf-svg" role="img"
            aria-label={t.playfield.ariaLabel}>
         {LANES.map((tier, i) => (
@@ -319,13 +376,22 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
               height={NOTE_H}
               rx={3}
               opacity={0}
-              fill={LANE_COLOURS[n.lane]}
+              fill={colour(n.consumer)}
               className="pf-note"
             >
               <title>{`${n.consumer} · ${n.path}`}</title>
             </rect>
           ))}
         </g>
+
+        {/* Both readouts sit on the field, where osu! puts them: combo through
+            the middle of the lanes, accuracy in the top corner. */}
+        <text x={W / 2} y={LINE * 0.56} textAnchor="middle" className="pf-combo">
+          {combo}x
+        </text>
+        <text x={W - 5} y={13} textAnchor="end" className="pf-acc">
+          {accuracy.toFixed(2)}%
+        </text>
 
         <line x1={0} x2={W} y1={LINE} y2={LINE} className="pf-line" />
 
@@ -335,13 +401,13 @@ export function Playfield({ s, feed }: { s: Snapshot; feed: RequestRow[] }) {
                 x={i * LANE_W + 1} y={LINE - 5}
                 width={LANE_W - 3} height={10} rx={3}
                 opacity={0}
-                fill={LANE_COLOURS[i]} className="pf-hit" />
+                fill={UNRANKED} className="pf-hit" />
         ))}
 
         {LANES.map((tier, i) => (
           <text key={`k-${tier}`} x={i * LANE_W + LANE_W / 2} y={H - 8}
                 textAnchor="middle" className="pf-key">
-            {tier.slice(0, 2).toUpperCase()}
+            {tier}
           </text>
         ))}
       </svg>
