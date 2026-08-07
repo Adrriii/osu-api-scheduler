@@ -227,14 +227,24 @@ Measured with the service fully stopped: the request still returned 200, in
 0.17s, because the connection itself brought the service back up. Consumers see
 latency, not errors.
 
-The socket is installed and enabled by `deploy/install.sh`. Under Docker there
-is no equivalent, so a restart there is a real gap of a few seconds.
+On bare metal that socket is systemd's, installed and enabled by
+`deploy/install.sh`. Under Docker the socket belongs to the container and an
+update destroys it, so `docker-compose.yml` runs a second tiny service that owns
+the published port and nothing else: it stays up across the swap, accepts the
+connection, and holds the caller until the scheduler answers. Same trade as the
+kernel backlog -- latency instead of failure. Measured against a scheduler
+stopped outright: connecting directly failed instantly, through the front it
+returned 200 after 6.4 seconds.
 
-If you run it behind Apache, `retry=0` on the `ProxyPass` is not optional. After
-one refused connection Apache marks the backend down and answers 502 for the
-next sixty seconds without trying it again, so a two second restart costs a
-minute of failed requests. The template in `deploy/` sets it; the nginx one
-retries once for the same reason.
+No off-the-shelf proxy does this, which is worth knowing before reaching for
+one. Apache, nginx and HAProxy all answer 502 the moment a connect is refused,
+and their retry settings only control how quickly they try again, not whether
+they wait.
+
+If you put a web server in front for TLS, `retry=0` on Apache's `ProxyPass` is
+not optional. After one refused connection it marks the backend down and answers
+502 for the next sixty seconds without trying again, so a two second restart
+costs a minute. The template in `deploy/` sets it.
 
 ### Releasing
 

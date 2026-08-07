@@ -1,13 +1,45 @@
 services:
-  scheduler:
-    build: .
-    image: osu-api-scheduler:latest
+  # Owns the published port and nothing else.
+  #
+  # On bare metal systemd holds the listening socket, so callers keep connecting
+  # while the service is replaced and the kernel queues them. A container has no
+  # equivalent: the socket belongs to the container and an update destroys it,
+  # so every update was a few seconds of refused connections. This is that
+  # missing piece -- it stays up across the swap, accepts the connection, and
+  # holds the caller until the scheduler answers again.
+  #
+  # It runs the plain node image with the script mounted, deliberately: nothing
+  # about it changes when the scheduler is rebuilt, so `up -d` leaves it running
+  # and only replaces the service behind it. Building it from the same image
+  # would recreate both and there would be nothing holding the port.
+  front:
+    image: node:22-alpine
     restart: unless-stopped
     # Published on localhost by default. The proxy endpoint is protected by
     # SCHEDULER_TOKEN, but there is no reason to expose it further than the
     # consumers actually need.
     ports:
       - "127.0.0.1:7654:7654"
+    volumes:
+      - ./deploy/front.mjs:/front.mjs:ro
+    command: ["node", "/front.mjs"]
+    environment:
+      FRONT_TARGET_HOST: scheduler
+      FRONT_TARGET_PORT: "7654"
+      # How long a caller waits rather than failing. Long enough to cover a
+      # rebuild and swap, short enough that a scheduler which is never coming
+      # back says so.
+      FRONT_HOLD_MS: "${FRONT_HOLD_MS:-30000}"
+    depends_on:
+      - scheduler
+
+  scheduler:
+    build: .
+    image: osu-api-scheduler:latest
+    restart: unless-stopped
+    # Reachable only from the front, on the compose network.
+    expose:
+      - "7654"
     volumes:
       - scheduler-data:/data
     # The whole .env reaches the container. Listing variables one by one meant
@@ -20,6 +52,9 @@ services:
       # Repeated here only to fail fast: starting without a token would expose
       # the request budget to anyone who can reach the port.
       SCHEDULER_TOKEN: "${SCHEDULER_TOKEN:?set SCHEDULER_TOKEN in .env}"
+      # Must listen on the container's address, not just loopback, or the front
+      # cannot reach it.
+      SCHEDULER_HOST: 0.0.0.0
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7654/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
