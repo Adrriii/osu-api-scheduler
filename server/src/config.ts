@@ -211,6 +211,21 @@ export const config = {
   /** Challenges within a minute before treating it as a real block. */
   challengeStormThreshold: num('SCHEDULER_CHALLENGE_STORM', 8),
 
+  /**
+   * Capacity allowed to accumulate while backed off. Small on purpose: enough
+   * to keep a probe and a login moving, not enough to bank a burst and fire it
+   * at the limiter the moment the pause lifts. Recovery then climbs back at the
+   * sustained rate instead of starting with a minute of credit in hand.
+   */
+  banBurstCeiling: num('SCHEDULER_BAN_BURST_CEILING', 3),
+
+  /**
+   * Levels that keep running through a challenge backoff, by priority. Defaults
+   * to realtime and interactive: a person waiting on a login, or a window that
+   * cannot be collected twice. Set to -1 to go back to stopping everything.
+   */
+  banBypassMaxPriority: num('SCHEDULER_BAN_BYPASS_MAX_PRIORITY', TIERS.interactive),
+
   /** Backoff shared with anything not yet routed through the scheduler. */
   banMirrorFile: str('SCHEDULER_BAN_FILE', `${RUNTIME_DIR}/backoff_until`),
 

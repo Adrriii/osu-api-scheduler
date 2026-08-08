@@ -29,6 +29,40 @@ export class Scheduler {
   private bannedUntil = 0;
 
   /**
+   * Whether the current backoff pauses every level or only the slow ones.
+   *
+   * A 1015 is a real per-IP quota -- the whole host is out of budget, so there
+   * is nothing for anyone and pausing everything is the only honest response.
+   * A bot challenge is not that. Measured over one 25-minute episode: of 382
+   * requests sent while challenges were arriving, every one of the 192 refusals
+   * landed on the normal-tier sweep that provoked them, and not one realtime or
+   * interactive request was refused. They were not blocked, they were queued --
+   * behind a penalty they did not earn, for 42s and 24s on average.
+   *
+   * That reading is not proven. The same numbers fit a duller story: nothing is
+   * sent during a backoff, so every request lands in the gap after one, and
+   * priority puts the fast levels at the front of it. Twenty-eight requests
+   * that were always first say nothing about whether they were spared.
+   *
+   * So the ban does not assume either way, it finds out -- see `banProbe`.
+   */
+  private banStopsEverything = true;
+
+  /**
+   * How the current challenge backoff is being tested.
+   *
+   * `idle`     nothing tried yet: the next fast request goes out alone.
+   * `inflight` that one request is out; nothing follows until it answers.
+   * `passed`   it came back clean, so upstream is still talking to us and the
+   *            remaining fast work can go.
+   *
+   * A refusal instead sets `banStopsEverything` and everything stops for the
+   * rest of the pause. The cost of being wrong is therefore one request per
+   * backoff, and either way the log says which it was.
+   */
+  private banProbe: 'idle' | 'inflight' | 'passed' = 'idle';
+
+  /**
    * Token bucket mirroring the upstream one: refills at the sustained rate,
    * caps at the burst allowance. Idle time banks capacity, which is what lets a
    * backlog drain fast without the long-run average ever exceeding the ceiling.
@@ -144,6 +178,19 @@ export class Scheduler {
     // would otherwise let us back out early and re-trip the limiter.
     if (until <= this.bannedUntil) return;
     this.bannedUntil = until;
+    this.banStopsEverything = limiter !== 'cloudflare-challenge';
+    this.banProbe = 'idle';
+
+    // Being turned away burns the banked burst. Held capacity is a claim that
+    // upstream had room we did not use -- the refusal is upstream saying it did
+    // not, so the bank is a debt, not savings. Keeping it means the ban ends
+    // with a minute of credit fired at the limiter that just refused us, which
+    // is how one backoff turns into the next. Recovery starts cold and climbs
+    // back at the refill rate; `refill` keeps it there until the ban lifts.
+    this.tokens = 0;
+    for (const tier of Object.keys(TIERS) as Tier[]) this.levels[tier] = 0;
+    this.lastRefillAt = Date.now();
+
     try {
       writeFileSync(BAN_MIRROR, String(Math.ceil(until / 1000)));
     } catch {
@@ -179,6 +226,17 @@ export class Scheduler {
   /** Latency-critical levels: allowed to spend the protected global reserve. */
   private isFast(tier: Tier): boolean {
     return TIERS[tier] <= config.burstFreeMaxPriority;
+  }
+
+  /**
+   * Levels that keep running through a bot challenge. Deliberately a stricter
+   * cut than `isFast`: spending a reserve is a question about our own budget,
+   * carrying on into a limiter that just refused us is a question about how
+   * much we are willing to provoke it, and the answer is only the work with a
+   * person or an unrepeatable window on the other end.
+   */
+  private bypassesBan(tier: Tier): boolean {
+    return TIERS[tier] <= config.banBypassMaxPriority;
   }
 
   /**
@@ -234,8 +292,17 @@ export class Scheduler {
     const elapsed = now - this.lastRefillAt;
     if (elapsed <= 0) return;
 
+    // Time spent backed off does not earn capacity. Measured on the 22:35
+    // episode: the pause ended and 192 requests went out in one minute against
+    // a 60/min ceiling, because a banked minute was waiting to be spent on the
+    // limiter that had just refused us. A backoff is upstream saying it had no
+    // room, so the honest reading of that minute is that we earned nothing --
+    // only enough to keep a probe and the latency-critical work moving.
+    const banned = this.banRemainingMs > 0;
+    const ceiling = banned ? config.banBurstCeiling : config.burstCapacity;
+
     const gained = elapsed / msPerToken;
-    this.tokens = Math.min(config.burstCapacity, this.tokens + gained);
+    this.tokens = Math.min(ceiling, this.tokens + gained);
 
     const all = Object.keys(TIERS) as Tier[];
     const depths = this.queue.depths();
@@ -253,13 +320,20 @@ export class Scheduler {
     let spill = 0;
     for (const tier of all) {
       const want = gained * (config.tierShareOfSustained[tier] ?? 0);
-      const room = this.levelCapacity(tier) - (this.levels[tier] ?? 0);
+      // Same rule per level, so a sweep sitting out a pause cannot bank its
+      // share of it and come back with a backlog's worth of credit.
+      const cap = banned ? Math.min(ceiling, this.levelCapacity(tier)) : this.levelCapacity(tier);
+      const room = cap - (this.levels[tier] ?? 0);
       const give = Math.max(0, Math.min(want, room));
       this.levels[tier] = (this.levels[tier] ?? 0) + give;
       spill += want - give;
     }
 
-    if (spill > 1e-9) {
+    // The anti-waste path hands a level's unusable share to whoever can hold
+    // it, and it fills to the full bank -- which during a pause would put back
+    // exactly the credit the ceiling above just refused to grant. Nothing is
+    // being wasted while backed off, so there is nothing to pass on.
+    if (spill > 1e-9 && !banned) {
       const leftover = this.distribute(spill, waiting.length ? waiting : all);
       this.distribute(leftover, all);
     }
@@ -274,8 +348,28 @@ export class Scheduler {
 
     if (this.queue.size === 0) return;
 
+    // A challenge does not refuse the whole API, so it does not stop the whole
+    // scheduler: the latency-critical levels keep going while the sweeps that
+    // provoke challenges sit it out. Anything else -- a 1015, or a ban restored
+    // from disk without a known cause -- really is refusing everything, and
+    // sending a login into that only spends its wait on a certain failure.
     const banMs = this.banRemainingMs;
-    if (banMs > 0) return void this.schedule(Math.min(banMs, 1000));
+    const fastOnly = banMs > 0 && !this.banStopsEverything;
+
+    if (banMs > 0 && !fastOnly) return void this.schedule(Math.min(banMs, 1000));
+
+    // While the probe is out, nothing else may go: one request is what we are
+    // willing to spend to learn whether the backoff covers this level too.
+    if (fastOnly && this.banProbe === 'inflight') return void this.schedule(250);
+
+    const allowed = (tier: Tier): boolean => !fastOnly || this.bypassesBan(tier);
+
+    if (fastOnly) {
+      const depths = this.queue.depths();
+      const anyFastWaiting = (Object.keys(TIERS) as Tier[]).some((t) => allowed(t) && depths[t]);
+      // Only sweeps are waiting, and they are the ones sitting this out.
+      if (!anyFastWaiting) return void this.schedule(Math.min(banMs, 1000));
+    }
 
     if (this.inFlight >= config.maxInFlight) return;
 
@@ -301,14 +395,16 @@ export class Scheduler {
     // exists for recovery. No bank ever goes negative.
     const order = (Object.keys(TIERS) as Tier[]).sort((a, b) => TIERS[a] - TIERS[b]);
 
-    let job = this.queue.take((tier) => (this.levels[tier] ?? 0) >= 1);
+    let job = this.queue.take((tier) => allowed(tier) && (this.levels[tier] ?? 0) >= 1);
     let payer: Tier | null = job ? job.tier : null;
 
     if (!job) {
       const depths = this.queue.depths();
       for (const tier of order) {
-        if (!depths[tier] || !this.mayBorrow(tier)) continue;
-        // Least important donor first, so a burst costs the cheapest work.
+        if (!depths[tier] || !allowed(tier) || !this.mayBorrow(tier)) continue;
+        // Least important donor first, so a burst costs the cheapest work. A
+        // level sitting out a challenge can still lend: its bank is idle, and
+        // that is exactly the capacity a login should be spending.
         const donor = [...order]
           .reverse()
           .find((t) => TIERS[t] > TIERS[tier] && (this.levels[t] ?? 0) >= 1);
@@ -325,6 +421,15 @@ export class Scheduler {
       // Nothing has budget, or only sweeps are waiting and the global bucket is
       // down at the reserve. Wait for a refill.
       return void this.schedule(msPerToken);
+    }
+
+    if (fastOnly && this.banProbe === 'idle') {
+      this.banProbe = 'inflight';
+      log.info('probing the backoff with one request', {
+        tier: job.tier,
+        consumer: job.consumer,
+        banRemainingS: Math.ceil(banMs / 1000),
+      });
     }
 
     this.levels[payer] = (this.levels[payer] ?? 0) - 1;
@@ -378,6 +483,22 @@ export class Scheduler {
         // challenges start arriving in bulk, which does look like a real block.
         if (res.limiter === 'cloudflare-challenge') {
           const now = Date.now();
+
+          // We let this one through an active backoff on the reading that a
+          // challenge follows the traffic that earned it. It was refused
+          // anyway, so the reading is wrong for this episode -- the block is
+          // wider than the sweeps. Believe the response over the assumption
+          // and stop everything for what is left of the pause.
+          if (this.banRemainingMs > 0 && !this.banStopsEverything && this.bypassesBan(job.tier)) {
+            this.banStopsEverything = true;
+            log.warn('challenge hit a protected level, stopping everything', {
+              tier: job.tier,
+              consumer: job.consumer,
+              path: job.request.path,
+              banRemainingS: Math.ceil(this.banRemainingMs / 1000),
+            });
+          }
+
           this.challengeTimes = this.challengeTimes.filter((t) => now - t < 60_000);
           this.challengeTimes.push(now);
           if (this.challengeTimes.length >= config.challengeStormThreshold) {
@@ -406,6 +527,19 @@ export class Scheduler {
       // Counted here rather than derived by the dashboard from its feed: that
       // buffer holds 150 rows, so a streak longer than that could not be
       // expressed and sat at 150 forever.
+      // The probe came back without a limiter: upstream is still answering this
+      // level, so the rest of the fast work may follow for this backoff. This
+      // is the measurement the tier-aware pause rests on -- if it never reaches
+      // here, the pause behaves exactly as it did before.
+      if (this.banProbe === 'inflight' && this.banRemainingMs > 0) {
+        this.banProbe = 'passed';
+        log.info('backoff does not cover this level, releasing it', {
+          tier: job.tier,
+          status: res.status,
+          banRemainingS: Math.ceil(this.banRemainingMs / 1000),
+        });
+      }
+
       if (res.status < 400) this.combo++;
       else this.combo = 0;
       const perTier = (this.stats.perTier[job.tier] ??= { served: 0, waitMsTotal: 0 });
@@ -417,6 +551,10 @@ export class Scheduler {
     } catch (err) {
       this.stats.failed++;
       this.combo = 0;
+      // A probe that died in transport answered nothing, so it must not leave
+      // the backoff sealed behind an attempt that never arrived. Let the next
+      // fast request take its turn.
+      if (this.banProbe === 'inflight') this.banProbe = 'idle';
       // A transport failure is the broker's problem, not osu!'s verdict on the
       // request, so report it as a gateway error rather than faking a status.
       log.error('upstream request failed', { path: job.request.path, err: String(err) });
