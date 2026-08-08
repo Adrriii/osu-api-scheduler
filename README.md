@@ -197,6 +197,26 @@ documents: 60 requests per minute, bursts to 1200.
 To change the rate while it runs, write the new value to
 `$SCHEDULER_STATE_DIR/pace_interval`. It is read every second, no restart.
 
+## Moving a Docker install onto the host
+
+```bash
+sudo ./deploy/migrate-to-bare.sh --dry-run   # say what it would do
+sudo ./deploy/migrate-to-bare.sh
+```
+
+Carries the token over first, since every consumer presents it, then the state
+out of the container -- metrics, buckets and the dashboard's session secret --
+then translates `.env` into the service's environment and installs. Your reverse
+proxy needs no change; it is the same address.
+
+Nothing is deleted: the compose project is stopped rather than removed and its
+volume is left alone, so going back is `docker compose up -d` after disabling
+the service.
+
+Worth doing because systemd holds the listening socket, so a restart is queued
+rather than refused. Under Docker the socket belongs to the container and an
+update destroys it, which is what the front container exists to work around.
+
 ## Update
 
 ```bash
