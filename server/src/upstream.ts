@@ -40,7 +40,23 @@ export function classify(status: number, contentType: string, body: string): Lim
   return 'osuweb';
 }
 
-export async function send(request: JobRequest): Promise<UpstreamResponse> {
+/**
+ * Under memory pressure undici has left a fetch pending forever despite its
+ * AbortSignal, wedging the job: its caller waited on it for good and its
+ * in-flight slot never came back. A plain timer is the backstop.
+ */
+export function send(request: JobRequest): Promise<UpstreamResponse> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`no upstream answer within ${config.requestTimeoutMs + 5_000}ms`)),
+      config.requestTimeoutMs + 5_000,
+    );
+  });
+  return Promise.race([fetchUpstream(request), deadline]).finally(() => clearTimeout(timer));
+}
+
+async function fetchUpstream(request: JobRequest): Promise<UpstreamResponse> {
   const url = `${config.upstreamBase}/${request.path}${request.query ? `?${request.query}` : ''}`;
 
   // Auth belongs entirely to the caller. Each app already has its own osu!
